@@ -29,10 +29,7 @@ import SouthEastIcon from "@mui/icons-material/SouthEast";
 import SearchIcon from "@mui/icons-material/Search";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
 
-const API_BASE =
-  (typeof import.meta !== "undefined" && import.meta?.env?.VITE_API_BASE) ||
-  process.env.REACT_APP_API_BASE ||
-  "http://localhost:5000";
+import { jsonFetch } from "../api"
 
 /* ---------- Animations (match Upload.jsx) ---------- */
 const appear = keyframes`from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}`;
@@ -329,10 +326,9 @@ export default function Dashboard() {
   // ---------- Logout handler (calls API, then clears and redirects) ----------
   const onLogout = useCallback(async () => {
     try {
-      await fetch(`${API_BASE}/api/logout`, {
+      await jsonFetch("/api/logout", {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" }
+        credentials: "include"
       }).catch(() => {});
     } finally {
       localStorage.removeItem("token");
@@ -348,11 +344,11 @@ export default function Dashboard() {
     (async () => {
       try {
         const [dash, wbs, act, top, ins] = await Promise.allSettled([
-          fetch(`${API_BASE}/api/dashboard`).then(r=>r.json()),
-          fetch(`${API_BASE}/api/workbooks`).then(r=>r.json()),
-          fetch(`${API_BASE}/api/activity?limit=10`).then(r=>r.json()),
-          fetch(`${API_BASE}/api/top-sheets?limit=5`).then(r=>r.json()),
-          fetch(`${API_BASE}/api/insights`).then(r=>r.json()).catch(()=>({}))
+          jsonFetch("/api/dashboard").then(r=>r.json()),
+          jsonFetch("/api/workbooks").then(r=>r.json()),
+          jsonFetch("/api/activity?limit=10").then(r=>r.json()),
+          jsonFetch("/api/top-sheets?limit=5").then(r=>r.json()),
+          jsonFetch("/api/insights").then(r=>r.json()).catch(()=>({}))
         ]);
         if (ignore) return;
         if (dash.status==="fulfilled") {

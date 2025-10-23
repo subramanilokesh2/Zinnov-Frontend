@@ -19,13 +19,9 @@ import CheckIcon from "@mui/icons-material/CheckCircle";
 import ReportIcon from "@mui/icons-material/Report";
 import RemoveIcon from "@mui/icons-material/RemoveCircleOutline";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
+import { jsonFetch } from "../api";
 
-const API_BASE =
-  (typeof import.meta !== "undefined" && import.meta?.env?.VITE_API_BASE) ||
-  process.env.REACT_APP_API_BASE ||
-  "http://localhost:5000";
-
-/** Colors used in Dashboard.jsx */
+/** Accent colors */
 const ZBLUE = "#0096D6";
 const ZTEAL = "#00BFA6";
 
@@ -90,18 +86,17 @@ export default function News() {
   const [catSel, setCatSel] = useState(new Set());
   const [group, setGroup] = useState("timeline"); // 'timeline' | 'category' | 'source'
 
-  // Modal
   const [active, setActive] = useState(null);
   const searchRef = useRef(null);
 
+  // ✅ jsonFetch already parses JSON and throws on non-2xx.
+  //    So we just await the value and DO NOT call .ok / .json().
   const loadSaved = useCallback(async () => {
     setLoading(true);
     setErr("");
     const ac = new AbortController();
     try {
-      const res = await fetch(`${API_BASE}/api/news?limit=300`, { signal: ac.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await jsonFetch(`/api/news?limit=300`, { signal: ac.signal });
       setItems(Array.isArray(data) ? data : []);
     } catch (e) {
       if (e?.name !== "AbortError") {
@@ -119,13 +114,11 @@ export default function News() {
     setErr("");
     const ac = new AbortController();
     try {
-      const res = await fetch(`${API_BASE}/api/news/refresh-batch`, {
+      await jsonFetch(`/api/news/refresh-batch`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count: 10 }),
+        body: { count: 10 },         // jsonFetch will set Content-Type and stringify for us
         signal: ac.signal,
       });
-      if (!res.ok) throw new Error(`Refresh HTTP ${res.status}`);
       await loadSaved();
     } catch (e) {
       if (e?.name !== "AbortError") {
@@ -141,8 +134,7 @@ export default function News() {
     setErr("");
     const ac = new AbortController();
     try {
-      const res = await fetch(`${API_BASE}/api/news/analyze`, { method: "POST", signal: ac.signal });
-      if (!res.ok) throw new Error(`Analyze HTTP ${res.status}`);
+      await jsonFetch(`/api/news/analyze`, { method: "POST", signal: ac.signal });
       await loadSaved();
     } catch (e) {
       if (e?.name !== "AbortError") {
@@ -308,7 +300,7 @@ export default function News() {
       a.source ?? "",
       a.published_at ?? "",
       a.url ?? "",
-      a?.insight?.sentiment ?? "",
+      (a?.insight?.sentiment ?? ""),
       (a?.insight?.categories || []).join("|"),
       (a.tags || []).join("|"),
       (a.summary || "").replace(/\n/g, " ").replace(/"/g, '""'),
@@ -499,10 +491,22 @@ export default function News() {
               <Skeleton height={40} />
             ) : (
               <>
-                <KPI label="Articles" value={stats.total} />
-                <KPI label="Sources" value={stats.uniqSources} />
-                <KPI label="Categories" value={stats.uniqCats} />
-                <KPI label="Date Span" value={stats.span} />
+                <KPI label="Articles" value={filtered.length} />
+                <KPI label="Sources" value={new Set(filtered.map((a) => a.source).filter(Boolean)).size} />
+                <KPI label="Categories" value={new Set(filtered.flatMap((a) => a?.insight?.categories || [])).size} />
+                <KPI
+                  label="Date Span"
+                  value={() => {
+                    const dates = filtered
+                      .map((a) => (a.published_at ? new Date(a.published_at).getTime() : null))
+                      .filter(Boolean)
+                      .sort((a, b) => a - b);
+                    return dates.length > 1
+                      ? `${new Date(dates[0]).toLocaleDateString()} → ${new Date(dates[dates.length - 1]).toLocaleDateString()}`
+                      : dates.length === 1
+                      ? new Date(dates[0]).toLocaleDateString()
+                      : "—";
+                  }} />
               </>
             )}
           </Paper>
@@ -512,9 +516,7 @@ export default function News() {
               value={group}
               onChange={(_, v) => setGroup(v)}
               variant="fullWidth"
-              sx={{
-                "& .MuiTabs-indicator": { height: 3, backgroundColor: theme.palette.primary.main },
-              }}
+              sx={{ "& .MuiTabs-indicator": { height: 3, backgroundColor: theme.palette.primary.main } }}
             >
               <Tab value="timeline" icon={<TimelineIcon />} label="Timeline" />
               <Tab value="category" icon={<CategoryIcon />} label="Category" />
@@ -539,13 +541,13 @@ export default function News() {
             </Typography>
             <Stack direction="row" spacing={0.5}>
               <Badge color="success" variant="dot">
-                <Chip size="small" label={stats.sentCount.positive} />
+                <Chip size="small" label={filtered.filter(a => (a?.insight?.sentiment || "neutral").toLowerCase()==="positive").length} />
               </Badge>
               <Badge color="default" variant="dot">
-                <Chip size="small" label={stats.sentCount.neutral} />
+                <Chip size="small" label={filtered.filter(a => (a?.insight?.sentiment || "neutral").toLowerCase()==="neutral").length} />
               </Badge>
               <Badge color="error" variant="dot">
-                <Chip size="small" label={stats.sentCount.negative} />
+                <Chip size="small" label={filtered.filter(a => (a?.insight?.sentiment || "neutral").toLowerCase()==="negative").length} />
               </Badge>
             </Stack>
           </Paper>
@@ -773,13 +775,14 @@ export default function News() {
 
 /* -------------------- mini KPI tile -------------------- */
 function KPI({ label, value }) {
+  const v = typeof value === "function" ? value() : value;
   return (
     <Stack spacing={0.25}>
       <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: ".04em", fontWeight: 900 }}>
         {label}
       </Typography>
       <Typography variant="h6" sx={{ lineHeight: 1.1 }} fontWeight={900}>
-        {value}
+        {v}
       </Typography>
     </Stack>
   );

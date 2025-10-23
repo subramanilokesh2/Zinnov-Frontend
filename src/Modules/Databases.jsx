@@ -1,926 +1,812 @@
-// src/Modules/Databases.jsx (Sleek Pro Redesign)
-// deps: @mui/material @emotion/react @mui/icons-material react-router-dom
+// src/Modules/Dashboard.jsx
 import * as React from "react";
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { keyframes } from "@emotion/react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import {
   AppBar, Toolbar, Container, Box, Typography, Button, Paper, Grid, Chip, Stack, Divider, Link,
-  Breadcrumbs, CssBaseline, ThemeProvider, createTheme, IconButton, useMediaQuery, Switch, Tooltip,
-  TextField, MenuItem, InputAdornment, Skeleton, ToggleButton, ToggleButtonGroup, Badge,
-  Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab,
-  Table, TableHead, TableBody, TableRow, TableCell, Alert, CircularProgress, Snackbar
+  Avatar, Breadcrumbs, CssBaseline, ThemeProvider, createTheme, Skeleton, IconButton, Drawer, List,
+  ListItem, ListItemButton, ListItemIcon, ListItemText, useMediaQuery, Switch, Tooltip, Badge, TextField
 } from "@mui/material";
 
 import MenuIcon from "@mui/icons-material/Menu";
+import StorageIcon from "@mui/icons-material/Storage";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import TableChartIcon from "@mui/icons-material/TableChart";
-import SlideshowIcon from "@mui/icons-material/Slideshow";
-import DescriptionIcon from "@mui/icons-material/Description";
-import FolderIcon from "@mui/icons-material/Folder";
-import SearchIcon from "@mui/icons-material/Search";
-import SortIcon from "@mui/icons-material/Sort";
+import InsightsIcon from "@mui/icons-material/Insights";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import ColorLensIcon from "@mui/icons-material/ColorLens";
-import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
-import StarBorderIcon from "@mui/icons-material/StarBorder";
-import StarIcon from "@mui/icons-material/Star";
-import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
-import ViewAgendaIcon from "@mui/icons-material/ViewAgenda";
-import GridViewIcon from "@mui/icons-material/GridView";
-import EditIcon from "@mui/icons-material/Edit";
-import AddIcon from "@mui/icons-material/Add";
-import DeleteIcon from "@mui/icons-material/Delete";
-import SaveIcon from "@mui/icons-material/Save";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-import DensityMediumIcon from "@mui/icons-material/DensityMedium";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import DoneIcon from "@mui/icons-material/Done";
+import UpdateIcon from "@mui/icons-material/Update";
+import FolderIcon from "@mui/icons-material/Folder";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import BoltIcon from "@mui/icons-material/Bolt";
+import ShieldIcon from "@mui/icons-material/Shield";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import NorthEastIcon from "@mui/icons-material/NorthEast";
+import SouthEastIcon from "@mui/icons-material/SouthEast";
+import SearchIcon from "@mui/icons-material/Search";
+import NewspaperIcon from "@mui/icons-material/Newspaper";
 
-/* API base */
-const API_BASE =
-  (typeof import.meta !== "undefined" && import.meta?.env?.VITE_API_BASE) ||
-  process.env.REACT_APP_API_BASE ||
-  "http://localhost:5000";
+import { jsonFetch } from "../api";
 
-/* Animations */
+/* ---------- Animations ---------- */
 const appear = keyframes`from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}`;
 const shimmer = keyframes`0%{transform:translateX(-40%)}100%{transform:translateX(140%)}`;
-const glow = keyframes`0%{box-shadow:0 0 0 rgba(0,150,214,0)}50%{box-shadow:0 10px 34px rgba(0,150,214,.25)}100%{box-shadow:0 0 0 rgba(0,150,214,0)}`;
+const pulse = keyframes`0%{box-shadow:0 0 0 0 rgba(0,150,214,.25)}70%{box-shadow:0 0 0 18px rgba(0,150,214,0)}100%{box-shadow:0 0 0 0 rgba(0,150,214,0)}`;
 
-/* Theme */
-const ZBLUE = "#0096D6", ZTEAL = "#00BFA6", ZBG = "linear-gradient(0deg, #f8fbff, #f3f6fb)";
-const makeTheme = (mode="light") => createTheme({
-  palette: {
-    mode, primary: { main: ZBLUE, contrastText: "#fff" }, secondary: { main: ZTEAL },
-    background: { default: mode === "light" ? "#f2f5fa" : "#0b1116", paper: mode === "light" ? "#ffffff" : "#0f1620" },
-    text: { primary: mode === "light" ? "#0e1a2b" : "#e8f1f9", secondary: mode === "light" ? "#5b6777" : "#a9bacb" },
-    divider: mode === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.08)",
-  },
-  shape: { borderRadius: 18 },
-  typography: {
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial",
-    h1: { fontSize: "clamp(1.6rem, 2.2vw + 1rem, 2.4rem)", fontWeight: 900, letterSpacing: -0.5 },
-    h2: { fontSize: "clamp(1.2rem, 1.1vw + 0.9rem, 1.6rem)", fontWeight: 800 },
-    button: { fontWeight: 700 },
-  },
-  components: {
-    MuiPaper: { styleOverrides: { root: { transition: "transform .2s ease, box-shadow .2s ease, border-color .2s ease" } } },
-    MuiButton: { styleOverrides: { root: { textTransform: "none", borderRadius: 14 } } },
-    MuiToggleButton: { styleOverrides: { root: { textTransform: "none", borderRadius: 10 } } },
-  },
-});
-
-/* Constants + helpers */
-const SUB_PRACTICES = ["Automation", "Platforms", "M/A", "Services", "Zones"];
-const TYPE_META = {
-  EXCEL: { label: "Excel", icon: <TableChartIcon fontSize="small" />, color: "#2E7D32" },
-  POWERPOINT: { label: "PowerPoint", icon: <SlideshowIcon fontSize="small" />, color: "#D32F2F" },
-  REPORT: { label: "Report", icon: <DescriptionIcon fontSize="small" />, color: "#5E35B1" },
-};
-const SORTS = [
-  { value: "recent", label: "Recent" },
-  { value: "title_asc", label: "Title A→Z" },
-  { value: "title_desc", label: "Title Z→A" },
-];
-const nf = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
-const df = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
-
-function asTagArray(tags) {
-  if (!tags) return [];
-  if (Array.isArray(tags)) return tags.map(String);
-  try { const j = JSON.parse(tags); return Array.isArray(j) ? j.map(String) : []; }
-  catch { return String(tags).replace(/[{}\[\]]/g,"").split(/[;,]+/g).flatMap((s)=>s.split(",")).map((s)=>s.trim()).filter(Boolean); }
-}
-function applyFilters(files, { query, type, sort, subPractice }) {
-  let list = [...files];
-  if (query.trim()) {
-    const q = query.toLowerCase();
-    list = list.filter((f) =>
-      (f.title || "").toLowerCase().includes(q) ||
-      (f.original_name || "").toLowerCase().includes(q) ||
-      asTagArray(f.tags).join(" ").toLowerCase().includes(q)
-    );
-  }
-  if (type) list = list.filter((f) => f.type === type);
-  if (subPractice && subPractice !== "All") list = list.filter((f) => (f.sub_practice || "Unassigned") === subPractice);
-  switch (sort) {
-    case "title_asc": list.sort((a,b)=>(a.title||"").localeCompare(b.title||"")); break;
-    case "title_desc": list.sort((a,b)=>(b.title||"").localeCompare(a.title||"")); break;
-    default: list.sort((a,b)=> new Date(b.updated_at||b.created_at) - new Date(a.updated_at||a.created_at));
-  }
-  return list;
-}
-
-/* Shared building blocks */
-const GlassPaper = (props) => (
-  <Paper
-    variant="outlined"
-    {...props}
-    sx={{
-      borderRadius: 3,
-      background: (t) =>
-        t.palette.mode === "light"
-          ? "linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.88))"
-          : "linear-gradient(180deg, rgba(22,30,39,.92), rgba(22,30,39,.84))",
-      borderColor: "divider",
-      boxShadow: (t) =>
-        t.palette.mode === "light"
-          ? "0 6px 24px rgba(16,24,40,.06)"
-          : "0 8px 30px rgba(0,0,0,.35)",
-      transition: "transform .2s ease, box-shadow .2s ease, border-color .2s ease",
-      "&:hover": {
-        transform: { md: "translateY(-2px)" },
-        borderColor: "primary.main",
-        boxShadow: (t) =>
-          t.palette.mode === "light"
-            ? "0 14px 40px rgba(16,24,40,.10)"
-            : "0 16px 50px rgba(0,0,0,.55)",
+/* ---------- Theme ---------- */
+const ZBLUE = "#0096D6", ZTEAL = "#00BFA6";
+const ZBG_LIGHT = "linear-gradient(0deg, #f8fbff, #f3f6fb)";
+const makeTheme = (mode = "light") =>
+  createTheme({
+    palette: {
+      mode,
+      primary: { main: ZBLUE, contrastText: "#fff" },
+      secondary: { main: ZTEAL },
+      background: {
+        default: mode === "light" ? "#eef3f8" : "#0a0f14",
+        paper: mode === "light" ? "#ffffff" : "#0f1620"
       },
-      ...props.sx,
-    }}
-  />
-);
-
-const ActionBar = ({ children }) => (
-  <Stack
-    direction="row"
-    spacing={0.75}
-    sx={{
-      opacity: 0,
-      transform: "translateY(4px)",
-      transition: "all .18s ease",
-      ".file-card:hover & , tr.MuiTableRow-hover:hover &": { opacity: 1, transform: "translateY(0)" },
-      "& .MuiButton-root": { borderRadius: 2 }
-    }}
-  >
-    {children}
-  </Stack>
-);
-
-/* Command Bar */
-function CommandBar({ query, setQuery, type, setType, sort, setSort, subPractice, setSubPractice, totals, dark, setDark, onSaveView, density, setDensity, view, setView }) {
-  return (
-    <GlassPaper elevation={0} sx={{
-      p: { xs: 2, sm: 3 }, mb: 2, borderRadius: 4,
-      animation: `${appear} .55s ease-out`, position: "sticky", top: 72, zIndex: 2,
-    }}>
-      <Stack spacing={1.25}>
-        <Box sx={{ position: "relative", maxWidth: 980, mx: "auto" }}>
-          <TextField
-            fullWidth placeholder="Search everything — title, file name, tags  (⌘/Ctrl + K)"
-            value={query} onChange={(e) => setQuery(e.target.value)}
-            InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
-            sx={{ "& .MuiOutlinedInput-root": { borderRadius: 4, py: 0.25, background: (t)=> t.palette.mode === "light" ? "#fff" : "rgba(255,255,255,0.04)", animation: `${glow} 4.5s ease-in-out infinite` } }}
-          />
-          <Box aria-hidden sx={{
-            position: "absolute", inset: 0, pointerEvents: "none",
-            background: "linear-gradient(90deg, transparent, rgba(0,150,214,0.12), transparent)",
-            width: "40%", animation: `${shimmer} 3.2s linear infinite`,
-            maskImage: "linear-gradient(to right, transparent, black, transparent)",
-          }} />
-        </Box>
-
-        <Stack direction={{ xs: "column", lg: "row" }} spacing={1} alignItems={{ xs: "stretch", lg: "center" }} justifyContent="space-between">
-          {/* Quick facets */}
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-            <ToggleButtonGroup color="primary" exclusive value={type} onChange={(_, v) => setType(v || "")} sx={{ flexWrap: "wrap" }}>
-              <ToggleButton value=""><Typography variant="body2">All</Typography></ToggleButton>
-              <ToggleButton value="EXCEL"><TableChartIcon sx={{ mr: .5 }} fontSize="small" />Excel</ToggleButton>
-              <ToggleButton value="POWERPOINT"><SlideshowIcon sx={{ mr: .5 }} fontSize="small" />PPT</ToggleButton>
-              <ToggleButton value="REPORT"><DescriptionIcon sx={{ mr: .5 }} fontSize="small" />Reports</ToggleButton>
-            </ToggleButtonGroup>
-
-            <TextField select size="small" value={subPractice} onChange={(e)=>setSubPractice(e.target.value)} sx={{ minWidth: 160 }}>
-              {["All", ...SUB_PRACTICES].map((sp)=>(<MenuItem key={sp} value={sp}>{sp}</MenuItem>))}
-            </TextField>
-
-            <TextField select size="small" value={sort} onChange={(e)=>setSort(e.target.value)}
-              InputProps={{ startAdornment: (<InputAdornment position="start"><SortIcon fontSize="small" /></InputAdornment>) }}
-              sx={{ minWidth: 180 }}>
-              {SORTS.map(s => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
-            </TextField>
-
-            <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, v) => setView(v || view)}>
-              <ToggleButton value="cards"><GridViewIcon fontSize="small" sx={{ mr: .5 }} />Cards</ToggleButton>
-              <ToggleButton value="rows"><ViewAgendaIcon fontSize="small" sx={{ mr: .5 }} />Rows</ToggleButton>
-            </ToggleButtonGroup>
-
-            <TextField select size="small" value={density} onChange={(e)=>setDensity(e.target.value)}
-              InputProps={{ startAdornment: (<InputAdornment position="start"><DensityMediumIcon fontSize="small" /></InputAdornment>) }}
-              sx={{ minWidth: 160 }}>
-              {[
-                {k:"comfortable", l:"Comfortable"},
-                {k:"cozy", l:"Cozy"},
-                {k:"compact", l:"Compact"},
-              ].map(x=> <MenuItem key={x.k} value={x.k}>{x.l}</MenuItem>)}
-            </TextField>
-          </Stack>
-
-          {/* Right controls */}
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Stack direction="row" spacing={1}>
-              <Chip icon={<TableChartIcon />} label={`Excel ${nf.format(totals.EXCEL)}`} />
-              <Chip icon={<SlideshowIcon />} label={`PPT ${nf.format(totals.POWERPOINT)}`} />
-              <Chip icon={<DescriptionIcon />} label={`Reports ${nf.format(totals.REPORT)}`} />
-              <Chip color="primary" label={`Total ${nf.format(totals.all)}`} />
-            </Stack>
-            <Tooltip title={dark ? "Switch to light" : "Switch to dark"}>
-              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ ml: 1 }}>
-                <ColorLensIcon fontSize="small" />
-                <Switch checked={dark} onChange={() => setDark(d => !d)} inputProps={{ "aria-label": "Toggle dark mode" }} />
-              </Stack>
-            </Tooltip>
-            <Button variant="outlined" onClick={onSaveView}>Save view</Button>
-          </Stack>
-        </Stack>
-      </Stack>
-    </GlassPaper>
-  );
-}
-
-/* File card */
-function FileCardPro({ file, favorites, onFav, onEditExcel }) {
-  const meta = TYPE_META[file.type] || TYPE_META.REPORT;
-  const fav = favorites.has(file.id);
-  const sizeMB = file.size ? (Number(file.size) / (1024 * 1024)).toFixed(2) : null;
-
-  return (
-    <GlassPaper className="file-card" sx={{
-      p: 1.5, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 1.25,
-      minHeight: 126, borderColor: "divider",
-      position: "relative", overflow: "hidden"
-    }}>
-      {/* Icon tile with glossy ring */}
-      <Box sx={{ position: "relative" }}>
-        <Box sx={{ width: 56, height: 56, borderRadius: 2.5, bgcolor: meta.color, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center",
-          backgroundImage: "linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0))" }}>
-          {meta.icon}
-        </Box>
-        {fav && (
-          <Box sx={{ position:"absolute", top:-2, right:-2, width: 14, height: 14, borderRadius: "50%", bgcolor: "#FFC107", boxShadow: "0 0 0 2px white" }} />
-        )}
-      </Box>
-
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 900, fontSize: 16, lineHeight: 1.15, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
-                    title={file.title || file.original_name}>
-          {file.title || file.original_name}
-        </Typography>
-        <Typography variant="caption" sx={{ mt: 0.25, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New'", color: "text.secondary", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                    title={file.original_name}>
-          {file.original_name}
-        </Typography>
-
-        <Stack direction="row" spacing={0.75} sx={{ mt: 0.75, flexWrap: "wrap", alignItems:"center" }}>
-          <Chip size="small" label={(file.ext || "").toUpperCase() || "FILE"} sx={{ fontWeight: 700 }} />
-          <Chip size="small" label={meta.label} sx={{ bgcolor: `${meta.color}22`, color: meta.color, fontWeight: 700 }} />
-          <Chip size="small" variant="outlined" label={file.sub_practice || "Unassigned"} />
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-            v{file.version} · {sizeMB ? `${sizeMB} MB · ` : ""}Updated {df.format(new Date(file.updated_at || file.created_at))}
-          </Typography>
-        </Stack>
-
-        {!!asTagArray(file.tags).length && (
-          <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, flexWrap: "wrap" }}>
-            {asTagArray(file.tags).slice(0, 3).map((t, i) => (<Chip key={i} size="small" label={t} sx={{ mr: 0.5, mb: 0.5 }} />))}
-            {asTagArray(file.tags).length > 3 && <Chip size="small" label={`+${asTagArray(file.tags).length - 3}`} />}
-          </Stack>
-        )}
-      </Box>
-
-      <ActionBar>
-        {file.type === "EXCEL" && (
-          <Tooltip title="Edit data"><Button size="small" variant="contained" startIcon={<EditIcon />} onClick={() => onEditExcel(file)}>Edit</Button></Tooltip>
-        )}
-        {file.download_url && (
-          <Tooltip title="Download"><Button size="small" variant="outlined" startIcon={<CloudDownloadIcon />} href={file.download_url} target="_blank" rel="noopener noreferrer">Download</Button></Tooltip>
-        )}
-        <Tooltip title={fav ? "Unfavorite" : "Favorite"}>
-          <IconButton size="small" onClick={() => onFav(file.id)}>{fav ? <StarIcon color="warning" /> : <StarBorderIcon />}</IconButton>
-        </Tooltip>
-        <Tooltip title="More">
-          <IconButton size="small"><MoreVertIcon /></IconButton>
-        </Tooltip>
-      </ActionBar>
-    </GlassPaper>
-  );
-}
-
-/* Rows view (Power mode) */
-function RowsTablePro({ files, favorites, onFav, onEditExcel, density }) {
-  const rowHeights = { comfortable: 56, cozy: 48, compact: 40 };
-  const size = density === "comfortable" ? "medium" : "small";
-
-  return (
-    <GlassPaper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
-      <Table size={size} stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ width: "40%", position:"sticky", left:0, background:"background.paper", zIndex:1 }}>Title</TableCell>
-            <TableCell sx={{ width: "18%" }}>File Name</TableCell>
-            <TableCell sx={{ width: "12%" }}>Type</TableCell>
-            <TableCell sx={{ width: "14%" }}>Updated</TableCell>
-            <TableCell sx={{ width: "8%", position:"sticky", right:0, background:"background.paper", zIndex:1 }} align="right">Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {files.map((f) => {
-            const meta = TYPE_META[f.type] || TYPE_META.REPORT;
-            const fav = favorites.has(f.id);
-            return (
-              <TableRow key={f.id} hover sx={{ height: rowHeights[density] }}>
-                <TableCell sx={{ position:"sticky", left:0, background:"background.paper", zIndex:1 }}>
-                  <Typography sx={{ fontWeight: 900 }} title={f.title || f.original_name}>{f.title || f.original_name}</Typography>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: .25 }}>
-                    <Chip size="small" variant="outlined" label={f.sub_practice || "Unassigned"} />
-                    {!!asTagArray(f.tags).length && <Typography variant="caption" color="text.secondary">{asTagArray(f.tags).slice(0,2).join(" · ")}{asTagArray(f.tags).length>2?" · +"+(asTagArray(f.tags).length-2):""}</Typography>}
-                  </Stack>
-                </TableCell>
-                <TableCell title={f.original_name}><Typography variant="caption" sx={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New'" }}>{f.original_name}</Typography></TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={0.75} alignItems="center">
-                    <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: meta.color }} />
-                    <Typography variant="body2">{meta.label}</Typography>
-                    <Chip size="small" label={(f.ext || "").toUpperCase() || "FILE"} />
-                  </Stack>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">{df.format(new Date(f.updated_at || f.created_at))}</Typography>
-                  <Typography variant="caption" color="text.secondary">v{f.version}</Typography>
-                </TableCell>
-                <TableCell align="right" sx={{ position:"sticky", right:0, background:"background.paper", zIndex:1 }}>
-                  <ActionBar>
-                    {f.type === "EXCEL" && (
-                      <Tooltip title="Edit data"><IconButton size="small" onClick={() => onEditExcel(f)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                    )}
-                    {f.download_url && (
-                      <Tooltip title="Download"><IconButton size="small" href={f.download_url} target="_blank" rel="noopener noreferrer"><CloudDownloadIcon fontSize="small" /></IconButton></Tooltip>
-                    )}
-                    <Tooltip title={fav ? "Unfavorite" : "Favorite"}>
-                      <IconButton size="small" onClick={() => onFav(f.id)}>{fav ? <StarIcon color="warning" fontSize="small" /> : <StarBorderIcon fontSize="small" />}</IconButton>
-                    </Tooltip>
-                    <Tooltip title="More"><IconButton size="small"><MoreVertIcon fontSize="small" /></IconButton></Tooltip>
-                  </ActionBar>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </GlassPaper>
-  );
-}
-
-/* Excel editor dialog - Sleek Pro */
-function ExcelEditDialog({ open, onClose, file }) {
-  const [tabs, setTabs] = useState([]);
-  const [tabIndex, setTabIndex] = useState(0);
-
-  const [limit, setLimit] = useState(100);
-  const [offset, setOffset] = useState(0);
-
-  const [data, setData] = useState({ columns: [], rows: [], total: 0 });
-  const [dbCols, setDbCols] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
-
-  const active = tabs[tabIndex];
-
-  useEffect(() => {
-    if (!open || !file?.id) return;
-    (async () => {
-      setErr("");
-      try {
-        const r = await fetch(`${API_BASE}/api/excel/file/${file.id}/sheets`);
-        if (!r.ok) throw new Error(`Sheets fetch failed (${r.status})`);
-        const sheets = await r.json();
-        setTabs(sheets); setTabIndex(0); setOffset(0);
-      } catch (e) { setTabs([]); setErr(e.message || "Failed to load sheets"); }
-    })();
-  }, [open, file?.id]);
-
-  const loadColumns = useCallback(async () => {
-    if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/file/${file.id}/sheet/${encodeURIComponent(active.sheetName)}/columns`);
-    if (!r.ok) throw new Error(`Columns fetch failed (${r.status})`);
-    const payload = await r.json(); setDbCols((payload.columns || []).map((c) => c));
-  }, [active, file?.id]);
-
-  const loadRows = useCallback(async () => {
-    if (!active) return;
-    setLoading(true); setErr("");
-    try {
-      const r = await fetch(`${API_BASE}/api/excel/file/${file.id}/sheet/${encodeURIComponent(active.sheetName)}/rows?limit=${limit}&offset=${offset}`);
-      if (!r.ok) throw new Error(`Rows fetch failed (${r.status})`);
-      const payload = await r.json();
-      setData({ columns: payload.columns || [], rows: payload.rows || [], total: payload.total || 0 });
-      if (!dbCols.length) setDbCols(payload.columns || []);
-    } catch (e) { setData({ columns: [], rows: [], total: 0 }); setErr(e.message || "Failed to load rows"); }
-    finally { setLoading(false); }
-  }, [active, file?.id, limit, offset, dbCols.length]);
-
-  useEffect(() => {
-    if (!open || !active) return;
-    (async () => { try { await loadColumns(); } catch (e) { setErr(e.message); } await loadRows(); })();
-  }, [open, tabIndex, limit, offset, active, loadColumns, loadRows]);
-
-  // Column ops
-  const addColumn = async (name, type = "text", defVal) => {
-    if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/columns`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, type, default: defVal })
-    });
-    if (!r.ok) throw new Error(await r.text() || "Add column failed");
-  };
-  const renameColumn = async (oldName, newName) => {
-    if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/columns/${encodeURIComponent(oldName)}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ newName })
-    });
-    if (!r.ok) throw new Error(await r.text() || "Rename column failed");
-  };
-  const dropColumn = async (name) => {
-    if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/columns/${encodeURIComponent(name)}`, { method: "DELETE" });
-    if (!r.ok) throw new Error(await r.text() || "Delete column failed");
-  };
-
-  // Row ops
-  const addRow = async () => {
-    if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/rows`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: {} })
-    });
-    if (!r.ok) throw new Error(await r.text() || "Add row failed");
-  };
-  const updateCell = async (_rid, col, value) => {
-    if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/rows/${_rid}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: { [col]: value } })
-    });
-    if (!r.ok) throw new Error(await r.text() || "Update cell failed");
-  };
-  const deleteRow = async (_rid) => {
-    if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/rows/${_rid}`, { method: "DELETE" });
-    if (!r.ok) throw new Error(await r.text() || "Delete row failed");
-  };
-
-  const newColRef = useRef(); const newColTypeRef = useRef(); const newColDefRef = useRef();
-  const [renameFrom, setRenameFrom] = useState(""); const [renameTo, setRenameTo] = useState(""); const [dropWhich, setDropWhich] = useState("");
-  useEffect(() => { setRenameFrom(""); setRenameTo(""); setDropWhich(""); }, [tabIndex, dbCols.join("|")]); // eslint-disable-line
-
-  const pageStart = data.total === 0 ? 0 : offset + 1;
-  const pageEnd = Math.min(offset + data.rows.length, data.total);
-
-  const flashSnack = (msg, severity="success") => setSnack({ open: true, msg, severity });
-
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xl">
-      <DialogTitle>Excel Data — {file?.title || file?.original_name}</DialogTitle>
-      <DialogContent dividers sx={{ p: 0 }}>
-        <Box sx={{ px: 3, pt: 1.5 }}>
-          {tabs.length > 0 ? (
-            <>
-              <Tabs value={tabIndex} onChange={(_, v) => { setTabIndex(v); setOffset(0); }}
-                    variant="scrollable" scrollButtons="auto" sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
-                {tabs.map((s, i) => (<Tab key={i} label={`${s.sheetName} (${nf.format(s.rowCount)})`} />))}
-              </Tabs>
-
-              {/* toolbars */}
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "stretch", md: "center" }}
-                     justifyContent="space-between" sx={{ py: 1.25 }}>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                  <TextField inputRef={newColRef} size="small" placeholder="New column name" />
-                  <TextField inputRef={newColTypeRef} size="small" select defaultValue="text" sx={{ width: 140 }}>
-                    <MenuItem value="text">text</MenuItem>
-                    <MenuItem value="numeric">numeric</MenuItem>
-                    <MenuItem value="date">date</MenuItem>
-                    <MenuItem value="bool">bool</MenuItem>
-                  </TextField>
-                  <TextField inputRef={newColDefRef} size="small" placeholder="Default (optional)" />
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={async () => {
-                    try {
-                      await addColumn(newColRef.current.value, newColTypeRef.current.value, newColDefRef.current.value);
-                      newColRef.current.value = ""; newColDefRef.current.value = "";
-                      await loadColumns(); await loadRows(); flashSnack("Column added");
-                    } catch (e) { setErr(e.message); flashSnack(e.message, "error"); }
-                  }}>Add Column</Button>
-                </Stack>
-
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                  <TextField select size="small" value={renameFrom} onChange={(e)=>setRenameFrom(e.target.value)} sx={{ minWidth: 220 }}>
-                    {dbCols.filter(c=>c!=="_rid").map(c=>(<MenuItem key={c} value={c}>{c}</MenuItem>))}
-                  </TextField>
-                  <TextField size="small" placeholder="New name" value={renameTo} onChange={(e)=>setRenameTo(e.target.value)} />
-                  <Button variant="outlined" startIcon={<SaveIcon />} onClick={async () => {
-                    try { if (!renameFrom || !renameTo) return; await renameColumn(renameFrom, renameTo);
-                      setRenameFrom(""); setRenameTo(""); await loadColumns(); await loadRows(); flashSnack("Column renamed"); } catch (e) { setErr(e.message); flashSnack(e.message, "error"); }
-                  }}>Rename</Button>
-
-                  <TextField select size="small" label="Rows" value={String(limit)} onChange={(e)=>{ setLimit(Number(e.target.value)); setOffset(0); }} sx={{ width: 120, ml: { md: 1 } }}>
-                    {[50, 100, 500, 1000].map(r => <MenuItem key={r} value={r}>{r}</MenuItem>)}
-                  </TextField>
-
-                  <Tooltip title="Reload"><IconButton onClick={async()=>{ await loadColumns(); await loadRows(); flashSnack("Reloaded"); }}><RefreshIcon /></IconButton></Tooltip>
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={async()=>{ try { await addRow(); await loadRows(); flashSnack("Row added"); } catch(e){ setErr(e.message); flashSnack(e.message, "error"); } }}>Add Row</Button>
-                </Stack>
-              </Stack>
-
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "stretch", md: "center" }}
-                     justifyContent="space-between" sx={{ pb: 1 }}>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                  <TextField select size="small" value={dropWhich} onChange={(e)=>setDropWhich(e.target.value)} sx={{ minWidth: 220 }}>
-                    {dbCols.filter(c=>c!=="_rid").map(c=>(<MenuItem key={c} value={c}>{c}</MenuItem>))}
-                  </TextField>
-                  <Button color="error" variant="outlined" startIcon={<DeleteIcon />} onClick={async()=>{ try {
-                    if (!dropWhich) return; await dropColumn(dropWhich); setDropWhich(""); await loadColumns(); await loadRows(); flashSnack("Column deleted");
-                  } catch(e){ setErr(e.message); flashSnack(e.message, "error"); } }}>Delete Column</Button>
-                </Stack>
-
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Button variant="outlined" disabled={offset === 0} onClick={()=>setOffset(o=>Math.max(0, o - limit))}>Prev</Button>
-                  <Button variant="outlined" disabled={offset + limit >= data.total} onClick={()=>setOffset(o=>o + limit)}>Next</Button>
-                  <Typography variant="caption" sx={{ ml: 1 }}>
-                    {active ? `${active.tableName} · showing ${nf.format(pageStart)}–${nf.format(pageEnd)} of ${nf.format(data.total)}` : ""}
-                  </Typography>
-                </Stack>
-              </Stack>
-
-              {err && <Alert severity="error" sx={{ mb: 1, mx: 0.5 }}>{err}</Alert>}
-
-              <Box sx={{ p: 1.25 }}>
-                <GlassPaper variant="outlined" sx={{ borderRadius: 2, overflow: "auto" }}>
-                  {loading ? (
-                    <Stack alignItems="center" justifyContent="center" sx={{ p: 6 }}><CircularProgress /></Stack>
-                  ) : data.columns.length === 0 ? (
-                    <Stack alignItems="center" justifyContent="center" sx={{ p: 6 }}><Typography color="text.secondary">No rows</Typography></Stack>
-                  ) : (
-                    <Table size="small" stickyHeader>
-                      <TableHead>
-                        <TableRow>
-                          {data.columns.map((c) => (<TableCell key={c} sx={{ fontWeight: 800 }}>{c}</TableCell>))}
-                          <TableCell align="right" sx={{ fontWeight: 800 }}>Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {data.rows.map((r, idx) => (
-                          <TableRow key={r._rid ?? idx} hover>
-                            {data.columns.map((c) => (
-                              <TableCell key={c} sx={{ minWidth: 160 }}>
-                                <InlineEditableCell
-                                  defaultValue={r[c] ?? ""}
-                                  onSave={async (val) => { try { await updateCell(r._rid, c, val); setSnack({open:true, msg:"Saved", severity:"success"}); } catch (e1) { setErr(e1.message); setSnack({open:true, msg:e1.message, severity:"error"}); } }}
-                                />
-                              </TableCell>
-                            ))}
-                            <TableCell align="right">
-                              <Tooltip title="Delete row">
-                                <IconButton size="small" onClick={async () => { try { await deleteRow(r._rid); await loadRows(); flashSnack("Row deleted"); } catch (e2) { setErr(e2.message); flashSnack(e2.message, "error"); } }}>
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </GlassPaper>
-              </Box>
-            </>
-          ) : (<Box sx={{ p: 4 }}>{err ? <Alert severity="error">{err}</Alert> : <CircularProgress />}</Box>)}
-        </Box>
-      </DialogContent>
-
-      <DialogActions><Button onClick={onClose}>Close</Button></DialogActions>
-      <Snackbar open={snack.open} autoHideDuration={2000} onClose={()=>setSnack(s=>({...s, open:false}))}
-        message={snack.msg}
-      />
-    </Dialog>
-  );
-}
-
-function InlineEditableCell({ defaultValue, onSave }) {
-  const [val, setVal] = useState(defaultValue);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(()=> setVal(defaultValue), [defaultValue]);
-
-  return (
-    <Box sx={{ position:"relative" }}>
-      <TextField
-        variant="standard"
-        value={val}
-        onChange={(e)=>setVal(e.target.value)}
-        onBlur={async ()=>{
-          if (String(val) !== String(defaultValue)) {
-            try { setSaving(true); await onSave(val); setSaved(true); setTimeout(()=>setSaved(false), 800); } finally { setSaving(false); }
-          }
-        }}
-        onKeyDown={async (e)=>{
-          if (e.key === "Enter") { e.currentTarget.blur(); }
-          if (e.key === "Escape") { setVal(defaultValue); e.currentTarget.blur(); }
-        }}
-        fullWidth
-      />
-      {saving && <CircularProgress size={16} sx={{ position:"absolute", right: 8, top: 6 }} />}
-      {saved && <DoneIcon fontSize="small" sx={{ position:"absolute", right: 8, top: 6, color: "success.main" }} />}
-    </Box>
-  );
-}
-
-/* Left rail */
-function LeftRail({ filesBySPFiltered, totals, countsPerSP, activeSP, onJump }) {
-  return (
-    <GlassPaper sx={{ position: { md: "sticky" }, top: { md: 140 }, p: 1.25, borderRadius: 3, display: { xs: "none", md: "block" } }}>
-      <Stack spacing={0.25}>
-        {["All", ...Object.keys(filesBySPFiltered)].filter((v,i,a)=>a.indexOf(v)===i).map((sp) => (
-          <Button key={sp} onClick={() => onJump(sp)} fullWidth
-                  variant={activeSP === sp ? "contained" : "text"} color={activeSP === sp ? "primary" : "inherit"}
-                  sx={{ justifyContent: "space-between", borderRadius: 2, px: 1.25, py: 1, my: 0.25 }}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <FolderIcon fontSize="small" />
-              <Typography sx={{ fontWeight: 800 }}>{sp}</Typography>
-            </Stack>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Badge color="primary" badgeContent={(sp === "All" ? totals.EXCEL : (filesBySPFiltered[sp]||[]).filter(f => f.type === "EXCEL").length)} sx={{ mr: 0.5 }}><TableChartIcon fontSize="small" /></Badge>
-              <Badge color="secondary" badgeContent={(sp === "All" ? totals.POWERPOINT : (filesBySPFiltered[sp]||[]).filter(f => f.type === "POWERPOINT").length)} sx={{ mr: 0.5 }}><SlideshowIcon fontSize="small" /></Badge>
-              <Badge color="default" badgeContent={(sp === "All" ? totals.REPORT : (filesBySPFiltered[sp]||[]).filter(f => f.type === "REPORT").length)}><DescriptionIcon fontSize="small" /></Badge>
-            </Stack>
-          </Button>
-        ))}
-      </Stack>
-      <Divider sx={{ my: 1 }} />
-      <Button fullWidth variant="text" startIcon={<ArrowUpwardIcon />} onClick={() => onJump("All")}>Back to top</Button>
-    </GlassPaper>
-  );
-}
-function SectionHeader({ sp, list }) {
-  return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-      <FolderIcon color="primary" />
-      <Typography variant="h2" sx={{ fontSize: 18, fontWeight: 800 }}>{sp}</Typography>
-      <Chip size="small" label={nf.format(list.length)} />
-      <Box sx={{ ml: "auto" }}>
-        <Badge color="primary" badgeContent={list.filter(f => f.type === "EXCEL").length} sx={{ mr: 1 }}><TableChartIcon fontSize="small" /></Badge>
-        <Badge color="secondary" badgeContent={list.filter(f => f.type === "POWERPOINT").length} sx={{ mr: 1 }}><SlideshowIcon fontSize="small" /></Badge>
-        <Badge color="default" badgeContent={list.filter(f => f.type === "REPORT").length}><DescriptionIcon fontSize="small" /></Badge>
-      </Box>
-    </Stack>
-  );
-}
-function Footer() {
-  return (
-    <Box component="footer" role="contentinfo" sx={{ py: 4, px: 3, background: "linear-gradient(180deg, rgba(0,150,214,0.08), rgba(0,191,166,0.08))", borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-      <Typography variant="body2" color="text.secondary" align="center">
-        © {new Date().getFullYear()} Zinnov Platform · <Link href="#" underline="hover">Privacy</Link> · <Link href="#" underline="hover">Terms</Link>
-      </Typography>
-    </Box>
-  );
-}
-
-/* Main */
-export default function Databases() {
-  const [dark, setDark] = useState(false);
-  const theme = useMemo(() => makeTheme(dark ? "dark" : "light"), [dark]);
-  const isMdUp = useMediaQuery(theme.breakpoints.up("md"));
-
-  const [loading, setLoading] = useState(true);
-  const [filesBySP, setFilesBySP] = useState(new Map());
-  const [fallbackFlat, setFallbackFlat] = useState([]);
-
-  const [query, setQuery] = useState("");
-  const [type, setType] = useState("");
-  const [sort, setSort] = useState("recent");
-  const [view, setView] = useState("cards");
-  const [subPractice, setSubPractice] = useState("All");
-  const [density, setDensity] = useState("cozy");
-  const [activeSP, setActiveSP] = useState("All");
-  const [favorites, setFavorites] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem("z_favs") || "[]")); } catch { return new Set(); }
+      text: {
+        primary: mode === "light" ? "#0e1a2b" : "#e8f1f9",
+        secondary: mode === "light" ? "#5b6777" : "#a9bacb"
+      }
+    },
+    shape: { borderRadius: 16 },
+    typography: {
+      fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial",
+      h1: { fontSize: "clamp(2rem, 2.2vw + 1rem, 2.8rem)", fontWeight: 900, letterSpacing: -0.4 },
+      h2: { fontSize: "clamp(1.2rem, 1.1vw + 0.9rem, 1.6rem)", fontWeight: 800 },
+      button: { fontWeight: 700 }
+    },
+    components: {
+      MuiPaper: { styleOverrides: { root: { transition: "transform .25s ease, box-shadow .25s ease, border-color .25s ease" } } },
+      MuiButton: { styleOverrides: { root: { textTransform: "none", borderRadius: 20 } } },
+      MuiChip: { styleOverrides: { root: { fontWeight: 700 } } }
+    }
   });
 
-  const sectionRefs = useRef({}); const containerRef = useRef(null);
+/* ---------- Utils ---------- */
+const nf = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+const nfp2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+const fromNow = (date) => {
+  const d = new Date(date);
+  const diffSec = Math.round((d.getTime() - Date.now()) / 1000); // negative => "x ago"
+  const steps = [[60,"second"],[60,"minute"],[24,"hour"],[7,"day"],[4.345,"week"],[12,"month"],[1e9,"year"]];
+  let v = Math.abs(diffSec), unit = "second";
+  for (const [s, u] of steps) { if (v < s) { unit = u; break; } v /= s; }
+  return rtf.format(Math.round(v) * Math.sign(diffSec), unit);
+};
 
-  // ⌘/Ctrl + K focus
+function useCountUp(value, duration = 800) {
+  const [display, setDisplay] = useState(0);
+  const last = useRef(0);
   useEffect(() => {
-    const handler = (e) => {
-      const meta = e.ctrlKey || e.metaKey;
-      if (meta && e.key.toLowerCase() === 'k') {
+    const start = performance.now();
+    const from = last.current;
+    const to = Number(value) || 0;
+    if (to === from) return;
+    let raf = 0;
+    const step = (t) => {
+      const p = Math.min(1, (t - start) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const v = Math.round(from + (to - from) * eased);
+      setDisplay(v);
+      if (p < 1) raf = requestAnimationFrame(step);
+      else last.current = to;
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return display;
+}
+
+function TiltPaper({ children, sx, ...rest }) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        border: (t)=>`1px solid ${t.palette.mode==="light" ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.08)"}`,
+        background: (t)=> t.palette.mode==="light"
+          ? "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.86))"
+          : "linear-gradient(180deg, rgba(22,30,39,0.95), rgba(22,30,39,0.86))",
+        borderRadius: 4,
+        ...sx
+      }}
+      {...rest}
+    >
+      {children}
+    </Paper>
+  );
+}
+
+function Confetti({ fire = false }) {
+  const [pieces, setPieces] = useState([]);
+  useEffect(() => {
+    if (!fire) return;
+    const colors = ["#00bfa6","#0096d6","#74e3ff","#ffffff"];
+    const arr = Array.from({ length: 22 }).map((_,i)=>({
+      id: i, left: 50 + (Math.random()*30-15), delay: Math.random() * 100,
+      rotate: Math.random()*360, color: colors[i % colors.length]
+    }));
+    setPieces(arr);
+    const t = setTimeout(()=>setPieces([]), 1600);
+    return ()=>clearTimeout(t);
+  }, [fire]);
+  return (
+    <Box sx={{ pointerEvents: "none", position: "absolute", inset: 0, overflow: "hidden" }}>
+      {pieces.map(p=>(
+        <Box key={p.id} sx={{
+          position: "absolute", top: 0, left: `${p.left}%`, width: 8, height: 10, bgcolor: p.color,
+          transform: `rotate(${p.rotate}deg)`, borderRadius: .5,
+          animation: `fall 1.6s ease-out ${p.delay}ms forwards`,
+          "@keyframes fall": {
+            "0%": { transform: `translateY(-20px) rotate(${p.rotate}deg)`, opacity: 0 },
+            "20%": { opacity: 1 },
+            "100%": { transform: `translateY(120%) rotate(${p.rotate+120}deg)`, opacity: 0 }
+          }
+        }}/>
+      ))}
+    </Box>
+  );
+}
+
+function KPI({ icon, label, value, hint, loading, accent="primary", bars=[], delta }) {
+  const numeric = Number(String(value).replace(/\D+/g,"")) || 0;
+  const display = useCountUp(loading ? 0 : numeric);
+  const hasDelta = typeof delta === "number";
+  const Up = delta > 0;
+  const Down = delta < 0;
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 2,
+        borderRadius: 3,
+        borderColor: (t)=> t.palette.mode==="light" ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.08)",
+        background: (t)=> t.palette.mode==="light"
+          ? "linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.9))"
+          : "linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03))",
+        position: "relative",
+        overflow: "hidden"
+      }}
+    >
+      <Stack direction="row" spacing={1.25} alignItems="center">
+        <Box sx={{
+          width: 46, height: 46, borderRadius: 2, color: "#fff",
+          bgcolor: (t)=> accent==="primary" ? t.palette.primary.main : accent==="secondary" ? t.palette.secondary.main : "#6D28D9",
+          display: "inline-flex", alignItems: "center", justifyContent: "center"
+        }}>
+          {icon}
+        </Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography variant="body2" color="text.secondary">{label}</Typography>
+          {loading
+            ? <Skeleton width={90} height={30} />
+            : <Stack direction="row" spacing={1} alignItems="baseline">
+                <Typography variant="h6" sx={{ lineHeight: 1.1 }}>{nf.format(display)}</Typography>
+                {hasDelta && (
+                  <Chip
+                    size="small"
+                    icon={Up ? <NorthEastIcon fontSize="small"/> : Down ? <SouthEastIcon fontSize="small"/> : undefined}
+                    label={`${Up?"+":""}${delta}%`}
+                    sx={{
+                      bgcolor: Up ? "rgba(0,191,166,.14)" : Down ? "rgba(237,76,92,.18)" : "rgba(0,0,0,.06)"
+                    }}
+                  />
+                )}
+              </Stack>}
+          {hint && !loading && <Typography variant="caption" color="text.secondary">{hint}</Typography>}
+        </Box>
+      </Stack>
+      {!!bars.length && <Box sx={{ mt: 1.25 }}><SparkBars data={bars} gradient={accent} /></Box>}
+    </Paper>
+  );
+}
+
+/* ---------- Main ---------- */
+export default function Dashboard() {
+  const [dark, setDark] = useState(false);
+  const theme = useMemo(() => makeTheme(dark ? "dark" : "light"), [dark]);
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const [drawer, setDrawer] = useState(false);
+  const navigate = useNavigate();
+
+  const [loading, setLoading] = useState(true);
+  const [kpis, setKpis] = useState({
+    datasets: 0, workbooks: 0, rowsTotal: 0, imports7d: 0, avgCols: 0,
+    queryAvgMs: 0, todayQueries: 0, compliant: true,
+    trendImports14: [], trendQueries14: []
+  });
+  const [recent, setRecent] = useState([]);
+  const [activity, setActivity] = useState([]);
+  const [topSheets, setTopSheets] = useState([]);
+  const [insights, setInsights] = useState({ hourly: [], topTags: [] });
+  const [celebrate, setCelebrate] = useState(false);
+  const lastImports = useRef(0);
+  const [command, setCommand] = useState("");
+  const [user, setUser] = useState(null);
+
+  // Auth + load user
+  useEffect(() => {
+    const keepHere = () => {
+      try { window.history.pushState(null, "", window.location.href); } catch {}
+    };
+    keepHere();
+    const pop = () => keepHere();
+    window.addEventListener("popstate", pop);
+
+    const keyNavBlocker = (e) => {
+      const tag = (e.target?.tagName || "").toLowerCase();
+      const isEditable = tag === "input" || tag === "textarea" || (e.target?.isContentEditable || e.target?.closest?.('[contenteditable="true"]'));
+      if ((e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) ||
+          ((e.metaKey || e.ctrlKey) && (e.key === "[" || e.key === "]")) ||
+          (e.key === "Backspace" && !isEditable)) {
         e.preventDefault();
-        const el = document.getElementById('global-search-input');
-        if (el) el.focus();
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", keyNavBlocker);
+
+    const beforeUnload = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", beforeUnload);
+
+    try { const stored = localStorage.getItem("authUser"); if (stored) setUser(JSON.parse(stored)); } catch {}
+    if (!localStorage.getItem("authUser")) navigate("/", { replace: true });
+
+    return () => {
+      window.removeEventListener("popstate", pop);
+      window.removeEventListener("keydown", keyNavBlocker);
+      window.removeEventListener("beforeunload", beforeUnload);
+    };
+  }, [navigate]);
+
+  // Cmd palette hotkey
+  useEffect(() => {
+    const handler = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); document.getElementById("global-cmd")?.focus(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  const runCommand = useCallback((val) => {
+    const v = (val || "").trim().toLowerCase();
+    if (!v) return;
+    if (v.startsWith("up") || v.includes("upload")) navigate("/upload");
+    else if (v.startsWith("data") || v.includes("db")) navigate("/files");
+    else if (v.startsWith("news") || v.includes("news")) navigate("/news");
+    else if (v.startsWith("help") || v.includes("doc")) navigate("/help");
+    setCommand("");
+  }, [navigate]);
+
+  const onLogout = useCallback(async () => {
+    try { await jsonFetch("/api/logout", { method: "POST", credentials: "include" }).catch(()=>{}); }
+    finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("authUser");
+      sessionStorage.clear();
+      window.location.replace("/");
+    }
+  }, []);
+
+  // 🔧 FIXED: use jsonFetch directly (no .json())
   useEffect(() => {
     let ignore = false;
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE}/api/files/organized`);
-        if (res.ok) {
-          const data = await res.json();
-          if (ignore) return;
-          const map = new Map();
-          Object.entries(data || {}).forEach(([sp, obj]) => {
-            map.set(sp, { files: Array.isArray(obj.files) ? obj.files : [], counts: obj.counts || {} });
+
+        const [dash, wbs, act, top, ins] = await Promise.allSettled([
+          jsonFetch("/api/dashboard"),                 // returns object
+          jsonFetch("/api/workbooks"),                 // returns array
+          jsonFetch("/api/activity?limit=10"),         // returns array
+          jsonFetch("/api/top-sheets?limit=5"),        // returns array
+          jsonFetch("/api/insights").catch(()=>({}))   // returns object
+        ]);
+
+        if (ignore) return;
+
+        if (dash.status === "fulfilled" && dash.value) {
+          const d = dash.value || {};
+          if (!loading && (d.imports7d ?? 0) > lastImports.current) setCelebrate(true);
+          lastImports.current = d.imports7d || 0;
+          setKpis({
+            datasets: d.datasets || 0,
+            workbooks: d.workbooks || 0,
+            rowsTotal: d.rowsTotal || 0,
+            imports7d: d.imports7d || 0,
+            avgCols: d.avgCols || 0,
+            queryAvgMs: d.queryAvgMs || 0,
+            todayQueries: d.todayQueries || 0,
+            compliant: !!d.compliant,
+            trendImports14: Array.isArray(d.trendImports14) ? d.trendImports14 : [],
+            trendQueries14: Array.isArray(d.trendQueries14) ? d.trendQueries14 : []
           });
-          setFilesBySP(map); setFallbackFlat([]);
-        } else {
-          const r2 = await fetch(`${API_BASE}/api/files?limit=2000`);
-          const list = r2.ok ? await r2.json() : [];
-          if (ignore) return;
-          setFallbackFlat(Array.isArray(list) ? list : []); setFilesBySP(new Map());
         }
-      } finally { if (!ignore) setLoading(false); }
+
+        if (wbs.status === "fulfilled" && Array.isArray(wbs.value)) {
+          const sorted = [...wbs.value].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+          setRecent(sorted.slice(0, 8));
+        } else {
+          setRecent([]); // ensure empty, not undefined
+        }
+
+        if (act.status === "fulfilled" && Array.isArray(act.value)) setActivity(act.value);
+        else setActivity([]);
+
+        if (top.status === "fulfilled" && Array.isArray(top.value)) setTopSheets(top.value);
+        else setTopSheets([]);
+
+        if (ins.status === "fulfilled" && ins.value) setInsights(ins.value || { hourly: [], topTags: [] });
+        else setInsights({ hourly: [], topTags: [] });
+
+      } finally {
+        if (!ignore) setLoading(false);
+      }
     })();
     return () => { ignore = true; };
-  }, []);
+  }, []); // run once
 
-  const allFiles = useMemo(() => filesBySP.size ? [...filesBySP.values()].flatMap(v => v.files) : fallbackFlat, [filesBySP, fallbackFlat]);
-  const countsPerSP = useMemo(() => {
-    const map = new Map();
-    for (const f of allFiles) { const k = f.sub_practice || "Unassigned"; map.set(k, (map.get(k) || 0) + 1); }
-    for (const sp of SUB_PRACTICES) if (!map.has(sp)) map.set(sp, 0);
-    return map;
-  }, [allFiles]);
-
-  const baseBySP = useMemo(() => {
-    return filesBySP.size
-      ? Object.fromEntries([...filesBySP.entries()].map(([sp, obj]) => [sp, obj.files]))
-      : allFiles.reduce((acc, f) => { const k = f.sub_practice || "Unassigned"; (acc[k] ||= []).push(f); return acc; }, {});
-  }, [filesBySP, allFiles]);
-
-  const filesBySPFiltered = useMemo(() => {
-    const out = {};
-    for (const [sp, list] of Object.entries(baseBySP)) {
-      const filtered = applyFilters(list, { query, type, sort, subPractice });
-      if (filtered.length) out[sp] = filtered;
-    }
-    return out;
-  }, [baseBySP, query, type, sort, subPractice]);
-
-  const totals = useMemo(() => {
-    const all = Object.values(filesBySPFiltered).flat();
-    return {
-      all: all.length,
-      EXCEL: all.filter(f => f.type === "EXCEL").length,
-      POWERPOINT: all.filter(f => f.type === "POWERPOINT").length,
-      REPORT: all.filter(f => f.type === "REPORT").length,
-    };
-  }, [filesBySPFiltered]);
-
-  useEffect(() => {
-    const el = containerRef.current; if (!el) return;
-    const sections = Object.keys(filesBySPFiltered);
-    const obs = new IntersectionObserver((entries) => {
-      const vis = entries.filter(e => e.isIntersecting).sort((a,b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (vis[0]) {
-        const sp = vis[0].target.getAttribute("data-sp");
-        if (sp && sp !== activeSP && activeSP !== "All") setActiveSP(sp);
-      }
-    }, { root: null, rootMargin: "-40% 0px -55% 0px", threshold: 0.01 });
-    sections.forEach(sp => { const node = sectionRefs.current[sp]; if (node) obs.observe(node); });
-    return () => obs.disconnect();
-  }, [filesBySPFiltered, activeSP]);
-
-  const onFav = (id) => {
-    setFavorites(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      try { localStorage.setItem("z_favs", JSON.stringify([...next])); } catch {}
-      return next;
-    });
-  };
-  const scrollToSP = (sp) => {
-    if (sp === "All") { window.scrollTo({ top: 0, behavior: "smooth" }); setActiveSP("All"); return; }
-    const node = sectionRefs.current[sp]; if (node) { node.scrollIntoView({ behavior: "smooth", block: "start" }); setActiveSP(sp); }
-  };
-
-  const [excelDialog, setExcelDialog] = useState({ open: false, file: null });
-
-  const handleSaveView = () => {
-    try {
-      const viewObj = { query, type, sort, view, subPractice, density };
-      localStorage.setItem("z_saved_view", JSON.stringify(viewObj));
-      alert("View saved");
-    } catch {}
-  };
-
-  useEffect(() => {
-    // Optional: restore saved view
-    try {
-      const v = JSON.parse(localStorage.getItem("z_saved_view")||"null");
-      if (v) { setQuery(v.query||""); setType(v.type||""); setSort(v.sort||"recent"); setView(v.view||"cards"); setSubPractice(v.subPractice||"All"); setDensity(v.density||"cozy"); }
-    } catch {}
-  }, []);
+  useEffect(()=>{ if (celebrate){ const t=setTimeout(()=>setCelebrate(false), 1700); return ()=>clearTimeout(t);} }, [celebrate]);
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{
-        minHeight: "100vh", overflowX: "hidden",
-        background: theme.palette.mode === "light"
-          ? `radial-gradient(1200px 600px at 12% -10%, rgba(0,150,214,0.10), transparent),
-             radial-gradient(900px 500px at 88% 0%, rgba(0,191,166,0.10), transparent), ${ZBG}`
-          : `radial-gradient(1200px 600px at 12% -10%, rgba(0,150,214,0.12), transparent),
-             radial-gradient(900px 500px at 88% 0%, rgba(0,191,166,0.12), transparent), linear-gradient(0deg, #0b1116, #0d141c)`,
-      }}>
-        <AppBar position="sticky" elevation={0} role="navigation" aria-label="Primary" sx={{
-          bgcolor: "transparent",
-          backgroundImage: theme.palette.mode === "light"
-            ? "linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.45))"
-            : "linear-gradient(180deg, rgba(20,28,36,0.75), rgba(20,28,36,0.45))",
-          backdropFilter: "blur(10px)", borderBottom: "1px solid rgba(0,0,0,0.06)",
-        }}>
-          <Toolbar sx={{ gap: 1.5, minHeight: 72, px: { xs: 1.5, md: 3 } }}>
-            <IconButton component={RouterLink} to="/dashboard" aria-label="Back to Dashboard"><MenuIcon /></IconButton>
-            <Breadcrumbs sx={{ ml: 1, color: "text.secondary" }} aria-label="breadcrumbs">
-              <Link component={RouterLink} underline="hover" to="/dashboard" color="inherit">Dashboard</Link>
-              <Typography color="text.primary" fontWeight={700}>Databases</Typography>
+      <Box
+        sx={{
+          minHeight: "100vh",
+          overflowX: "hidden",
+          background: theme.palette.mode === "light"
+            ? `radial-gradient(1200px 600px at 12% -10%, rgba(0,150,214,0.10), transparent),
+               radial-gradient(900px 500px at 88% 0%, rgba(0,191,166,0.10), transparent), ${ZBG_LIGHT}`
+            : `radial-gradient(1200px 600px at 12% -10%, rgba(0,150,214,0.12), transparent),
+               radial-gradient(900px 500px at 88% 0%, rgba(0,191,166,0.12), transparent), linear-gradient(0deg, #0b1116, #0d141c)`
+        }}
+      >
+        {/* AppBar */}
+        <AppBar
+          position="sticky"
+          elevation={0}
+          role="navigation"
+          aria-label="Primary"
+          sx={{
+            bgcolor: "transparent",
+            backgroundImage: theme.palette.mode === "light"
+              ? "linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.45))"
+              : "linear-gradient(180deg, rgba(20,28,36,0.75), rgba(20,28,36,0.45))",
+            backdropFilter: "blur(10px)",
+            borderBottom: "1px solid rgba(0,0,0,0.06)"
+          }}
+        >
+          <Toolbar sx={{ gap: 1.25, minHeight: 72, px: { xs: 1.25, md: 3 } }}>
+            {isMobile && <IconButton onClick={()=>setDrawer(true)} aria-label="menu"><MenuIcon/></IconButton>}
+            <Box
+              aria-label="Zinnov Home"
+              role="img"
+              sx={{
+                position: "relative", px: { xs: 1.2, sm: 1.6 }, py: .7, borderRadius: 2,
+                bgcolor: theme.palette.primary.main, color: "#fff", fontWeight: 900, letterSpacing: "0.02em",
+                overflow: "hidden", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                fontSize: { xs: 14, sm: 16 }
+              }}>
+              ZINNOV
+              <Box aria-hidden sx={{
+                position: "absolute", inset: 0,
+                background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent)",
+                width: "40%", animation: `${shimmer} 2.4s linear infinite`
+              }}/>
+            </Box>
+            <Breadcrumbs sx={{ ml: 2, color: "text.secondary", display: { xs: "none", md: "block" } }}>
+              <Link component={RouterLink} underline="hover" to="/dashboard" color="inherit">Platform</Link>
+              <Typography color="text.primary" fontWeight={800}>Dashboard</Typography>
             </Breadcrumbs>
             <Box sx={{ flexGrow: 1 }} />
-            <Button variant="contained" component={RouterLink} to="/upload" startIcon={<CloudUploadIcon />} aria-label="Upload new file" sx={{ borderRadius: 2 }}>
-              Upload
-            </Button>
+
+            {/* Command bar */}
+            <Box sx={{ display: { xs: "none", md: "flex" }, alignItems: "center", gap: 1, mr: 1.5 }}>
+              <Box sx={{ position: "relative", width: 360 }}>
+                <TextField
+                  id="global-cmd"
+                  size="small"
+                  placeholder="Jump to: Upload, Databases, News, Help  (⌘/Ctrl + K)"
+                  value={command}
+                  onChange={(e)=>setCommand(e.target.value)}
+                  onKeyDown={(e)=>{ if (e.key === "Enter") runCommand(command); }}
+                  InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1, opacity: .7 }} /> }}
+                  sx={{
+                    width: "100%",
+                    "& .MuiOutlinedInput-root": {
+                      background: theme.palette.mode==="light" ? "rgba(0,0,0,.03)" : "rgba(255,255,255,.06)",
+                      borderRadius: 999,
+                      "& fieldset": { borderColor: theme.palette.mode==="light" ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.08)" },
+                      "&:hover fieldset": { borderColor: theme.palette.mode==="light" ? "rgba(0,0,0,.16)" : "rgba(255,255,255,.16)" }
+                    }
+                  }}
+                />
+              </Box>
+              <Button variant="outlined" onClick={()=>runCommand(command)} sx={{ borderRadius: 999 }}>Go</Button>
+            </Box>
+
+            <Tooltip title={dark?"Switch to light":"Switch to dark"}>
+              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mr: 1 }}>
+                <ColorLensIcon fontSize="small" />
+                <Switch checked={dark} onChange={()=>setDark(d=>!d)} inputProps={{ "aria-label":"Toggle dark mode" }}/>
+              </Stack>
+            </Tooltip>
+            <Box sx={{ display: { xs: "none", sm: "flex" }, gap: 1 }}>
+              <Button color="inherit" component={RouterLink} to="/files">Databases</Button>
+              <Button color="inherit" component={RouterLink} to="/news" startIcon={<NewspaperIcon/>}>News</Button>
+              <Button color="inherit" component={RouterLink} to="/help" startIcon={<HelpOutlineIcon/>}>Help</Button>
+              <Button variant="contained" component={RouterLink} to="/upload" sx={{ borderRadius: 2 }}>Get Started</Button>
+              <Button color="error" variant="outlined" onClick={onLogout}>Logout</Button>
+            </Box>
           </Toolbar>
         </AppBar>
 
-        <Container maxWidth={false} sx={{ py: { xs: 2.5, md: 5 } }}>
-          <Box sx={{ maxWidth: "1440px", mx: "auto", px: { xs: 1.5, md: 3 } }}>
+        {/* Drawer */}
+        <Drawer anchor="left" open={drawer} onClose={()=>setDrawer(false)}>
+          <Box sx={{ width: 280 }} role="presentation" onClick={()=>setDrawer(false)} onKeyDown={()=>setDrawer(false)}>
+            <List>
+              {[
+                { label: "Databases", to: "/files", icon: <TableChartIcon /> },
+                { label: "Upload", to: "/upload", icon: <CloudUploadIcon /> },
+                { label: "News", to: "/news", icon: <NewspaperIcon /> },
+                { label: "Help", to: "/help", icon: <HelpOutlineIcon /> },
+              ].map((n)=>(
+                <ListItem key={n.label} disablePadding>
+                  <ListItemButton component={RouterLink} to={n.to}>
+                    <ListItemIcon>{n.icon}</ListItemIcon>
+                    <ListItemText primary={n.label}/>
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+        </Drawer>
 
-            <CommandBar
-              query={query} setQuery={setQuery}
-              type={type} setType={setType}
-              sort={sort} setSort={setSort}
-              subPractice={subPractice} setSubPractice={setSubPractice}
-              totals={totals}
-              dark={dark} setDark={setDark}
-              onSaveView={handleSaveView}
-              density={density} setDensity={setDensity}
-              view={view} setView={setView}
-            />
+        {/* Main */}
+        <Container maxWidth={false} sx={{ pt: { xs: 2, md: 5 }, pb: { xs: 2, md: 4 } }}>
+          <Box sx={{ maxWidth: "1280px", mx: "auto", px: { xs: 1.5, md: 3 }, position: "relative" }}>
+            <Confetti fire={celebrate} />
 
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "260px 1fr" }, gap: 2, alignItems: "start" }}>
-              <LeftRail filesBySPFiltered={filesBySPFiltered} totals={totals} countsPerSP={countsPerSP} activeSP={activeSP} onJump={scrollToSP} />
-              <Box ref={containerRef}>
-                {loading ? (
-                  <Grid container spacing={1.25}>
-                    {Array.from({ length: 12 }).map((_, i) => (<Grid key={i} item xs={12} sm={6} md={4} lg={3}><Skeleton variant="rounded" height={126} /></Grid>))}
-                  </Grid>
-                ) : Object.keys(filesBySPFiltered).length === 0 ? (
-                  <GlassPaper sx={{ p: 4, borderRadius: 4, textAlign: "center" }}>
-                    <Typography variant="h6" sx={{ mb: 0.5 }}>No files match</Typography>
-                    <Typography color="text.secondary">Try different filters or{" "}
-                      <Link component={RouterLink} to="/upload" underline="hover">upload a file</Link>.
-                    </Typography>
-                  </GlassPaper>
-                ) : (
-                  <Stack spacing={2}>
-                    {Object.entries(filesBySPFiltered).sort((a,b)=>a[0].localeCompare(b[0])).map(([sp, list]) => (
-                      <GlassPaper key={sp} variant="outlined" data-sp={sp} ref={(el)=>{ if (el) (sectionRefs.current[sp] = el); }}
-                             sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 3, animation: `${appear} .45s ease-out` }}>
-                        <SectionHeader sp={sp} list={list} />
-                        {view === "cards" ? (
-                          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 1.5, alignItems: "stretch" }}>
-                            {list.filter(f => favorites.has(f.id)).map(f => (
-                              <FileCardPro key={`fav-${f.id}`} file={f} favorites={favorites} onFav={onFav}
-                                        onEditExcel={(file) => setExcelDialog({ open: true, file })} />
-                            ))}
-                            {list.filter(f => !favorites.has(f.id)).map(f => (
-                              <FileCardPro key={f.id} file={f} favorites={favorites} onFav={onFav}
-                                        onEditExcel={(file) => setExcelDialog({ open: true, file })} />
-                            ))}
-                          </Box>
-                        ) : (
-                          <RowsTablePro
-                            files={[...list.filter(f => favorites.has(f.id)), ...list.filter(f => !favorites.has(f.id))]}
-                            favorites={favorites} onFav={onFav}
-                            onEditExcel={(file) => setExcelDialog({ open: true, file })}
-                            density={density}
-                          />
-                        )}
-                      </GlassPaper>
-                    ))}
+            {/* Hero */}
+            <TiltPaper sx={{ p: { xs: 2.5, md: 4 }, mb: 3, borderRadius: { xs: 3, md: 4 }, animation: `${appear} .55s ease-out` }}>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2.5} alignItems="center" justifyContent="space-between">
+                <Box sx={{ flex: 1 }}>
+                  <Stack direction="row" spacing={1} mb={1} flexWrap="wrap">
+                    <Chip icon={<AutoAwesomeIcon/>} label="Experience 3.0" color="primary" sx={{ color: "#fff" }}/>
+                    <Chip label="Fast • Secure • Searchable" variant="outlined" color="secondary" />
                   </Stack>
-                )}
-                <Divider sx={{ my: { xs: 3, md: 5 } }} />
-                <Footer />
-              </Box>
+
+                  <Typography
+                    variant="h1"
+                    gutterBottom
+                    sx={{
+                      background: "linear-gradient(90deg, #1b2a3b, #0e7ab7 40%, #00bfa6 90%)",
+                      WebkitBackgroundClip: "text",
+                      backgroundClip: "text",
+                      color: "transparent"
+                    }}
+                  >
+                    Data that feels delightful
+                  </Typography>
+
+                  <Typography color="text.secondary" sx={{ maxWidth: 720 }}>
+                    Upload spreadsheets, ingest sheets, and manage schemas—then explore everything with zero friction.
+                  </Typography>
+
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ mt: 2 }}>
+                    <Button
+                      variant="contained" size="large" startIcon={<CloudUploadIcon/>}
+                      component={RouterLink} to="/upload" sx={{ px: 3, animation: `${pulse} 2.8s ease-out infinite` }}>
+                      Upload Now
+                    </Button>
+                    <Button variant="outlined" size="large" startIcon={<TableChartIcon/>}
+                      component={RouterLink} to="/files" color="secondary" sx={{ px: 3 }}>
+                      Browse Databases
+                    </Button>
+                  </Stack>
+
+                  {!!(insights.topTags||[]).length && (
+                    <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
+                      {(insights.topTags||[]).map(t=>(
+                        <Chip key={t.tag} label={`#${t.tag}`} size="small"
+                          sx={{ bgcolor: theme.palette.mode==="light" ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.06)" }} />
+                      ))}
+                    </Stack>
+                  )}
+                </Box>
+
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    minWidth: { md: 320 },
+                    borderRadius: 3,
+                    borderColor: theme.palette.mode==="light" ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.08)",
+                    background: theme.palette.mode==="light"
+                      ? "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.90))"
+                      : "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.03))",
+                  }}>
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    <Avatar sx={{ bgcolor: ZTEAL, width: 44, height: 44, fontWeight: 800 }}>
+                      {user?.name ? user.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
+                    </Avatar>
+                    <Box>
+                      <Typography fontWeight={800}>{user?.name || "Guest User"}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {user?.role ? `${user.role}${user?.dept ? ` – ${user.dept}` : ""}` : "Zinnov Platform"}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Divider sx={{ my: 1.25 }} />
+                  <Stack spacing={1}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2" color="text.secondary">Email</Typography>
+                      <Typography fontWeight={700}>{user?.email || "—"}</Typography>
+                    </Stack>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2" color="text.secondary">Employee ID</Typography>
+                      <Typography fontWeight={700}>{user?.empId || "—"}</Typography>
+                    </Stack>
+                    <Divider sx={{ my: 1 }} />
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2" color="text.secondary">Uptime</Typography>
+                      <Typography fontWeight={700}><Badge color="success" variant="dot"/> 99.99%</Typography>
+                    </Stack>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2" color="text.secondary">Backups</Typography>
+                      <Typography fontWeight={700} color="secondary.main">ON</Typography>
+                    </Stack>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2" color="text.secondary">Security</Typography>
+                      <Typography fontWeight={700}><ShieldIcon fontSize="small" sx={{ mr: .5 }} /> Compliant</Typography>
+                    </Stack>
+                  </Stack>
+                </Paper>
+              </Stack>
+            </TiltPaper>
+
+            {/* KPIs */}
+            <Grid container spacing={2} sx={{ mb: 1 }}>
+              <Grid item xs={12} sm={6} md={4}>
+                <KPI icon={<StorageIcon/>} label="Total Datasets" value={nf.format(kpis.datasets)} loading={loading}
+                     accent="primary" bars={kpis.trendImports14} delta={kpis.datasets ? 3 : 0}/>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <KPI icon={<FolderIcon/>} label="Workbooks" value={nf.format(kpis.workbooks)} loading={loading}
+                     accent="secondary" bars={insights.hourly} delta={kpis.workbooks ? 2 : 0}/>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <KPI icon={<TrendingUpIcon/>} label="Rows Total" value={nf.format(kpis.rowsTotal)} loading={loading}
+                     accent="violet" delta={kpis.rowsTotal ? 5 : 0}/>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <KPI icon={<UpdateIcon/>} label="Imports (7d)" value={nf.format(kpis.imports7d)} loading={loading}
+                     hint={!loading && kpis.imports7d>0 ? "Great momentum!" : ""} accent="primary" delta={kpis.imports7d ? 7 : 0}/>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <KPI icon={<InsightsIcon/>} label="Avg. Query Time"
+                     value={loading ? "…" : `${nfp2.format(kpis.queryAvgMs)}ms`} accent="secondary" delta={-4}/>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <KPI icon={<VerifiedUserIcon/>} label="Security"
+                     value={loading ? "…" : (kpis.compliant ? "Compliant" : "Issues")} accent="violet"/>
+              </Grid>
+            </Grid>
+
+            {/* Trends • Activity • Top Datasets */}
+            <Grid container spacing={2.5} alignItems="stretch">
+              <Grid item xs={12} md={6} lg={5}>
+                <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, height: "100%", borderRadius: 4 }}>
+                  <Stack direction="row" alignItems="center" spacing={1} mb={0.5}>
+                    <BoltIcon color="primary" />
+                    <Typography variant="h2" sx={{ fontSize: 18, fontWeight: 800 }}>Activity Trends</Typography>
+                  </Stack>
+                  {loading ? (
+                    <Skeleton height={140} />
+                  ) : (
+                    <Stack spacing={2}>
+                      <Box>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: .5 }}>Imports (14d)</Typography>
+                          <Chip size="small" label={`${kpis.trendImports14.length} pts`} />
+                        </Stack>
+                        <SparkBars data={kpis.trendImports14} height={52} gradient="primary" />
+                      </Box>
+                      <Box>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: .5 }}>Queries (14d)</Typography>
+                          <Chip size="small" label={`${kpis.trendQueries14.length} pts`} />
+                        </Stack>
+                        <SparkBars data={kpis.trendQueries14} height={52} gradient="secondary" />
+                      </Box>
+                    </Stack>
+                  )}
+                </Paper>
+              </Grid>
+
+              <Grid item xs={12} md={6} lg={4}>
+                <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, height: "100%", borderRadius: 4 }}>
+                  <Stack direction="row" alignItems="center" spacing={1} mb={0.5}>
+                    <UpdateIcon color="primary" />
+                    <Typography variant="h2" sx={{ fontSize: 18, fontWeight: 800 }}>Recent Activity</Typography>
+                    {!loading && <Chip size="small" label={`${activity.length}`} sx={{ ml: "auto" }} />}
+                  </Stack>
+                  <Stack spacing={1.1}>
+                    {loading
+                      ? Array.from({ length: 6 }).map((_,i)=><Skeleton key={i} height={34}/>)
+                      : activity.length
+                        ? activity.map((a,i)=>(
+                            <Paper key={i} variant="outlined" sx={{ p: 1, borderRadius: 2 }}>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Chip size="small" label={a.evt?.replace?.(/_/g," ") || "event"} sx={{ textTransform:"capitalize" }} />
+                                <Typography sx={{ fontWeight: 700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                  {a.title || a.table || a.sheet_name || "—"}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+                                  {a.at ? fromNow(a.at) : "—"}
+                                </Typography>
+                              </Stack>
+                            </Paper>
+                          ))
+                        : <Typography color="text.secondary">No recent activity.</Typography>}
+                  </Stack>
+                </Paper>
+              </Grid>
+
+              <Grid item xs={12} lg={3}>
+                <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, height: "100%", borderRadius: 4 }}>
+                  <Stack direction="row" alignItems="center" spacing={1} mb={0.5}>
+                    <TrendingUpIcon color="primary" />
+                    <Typography variant="h2" sx={{ fontSize: 18, fontWeight: 800 }}>Top Datasets</Typography>
+                    {!loading && <Chip size="small" label={`${topSheets.length}`} sx={{ ml: "auto" }} />}
+                  </Stack>
+                  <Stack spacing={1.1}>
+                    {loading
+                      ? Array.from({ length: 5 }).map((_,i)=><Skeleton key={i} height={34}/>)
+                      : topSheets.length
+                        ? topSheets.map((s,i)=>(
+                            <Stack key={s.id ?? i} direction="row" spacing={1} alignItems="center">
+                              <Chip size="small" label={`#${i+1}`} />
+                              <Box sx={{ overflow:"hidden" }}>
+                                <Typography sx={{ fontWeight: 800, maxWidth: 220, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                                  {(s.schema_name || "public") + "." + (s.table_name || "table")}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">{nf.format(s.row_count || 0)} rows</Typography>
+                              </Box>
+                            </Stack>
+                          ))
+                        : <Typography color="text.secondary">No datasets yet.</Typography>}
+                  </Stack>
+                </Paper>
+              </Grid>
+
+              {/* Quick Actions */}
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ position: "relative", p: { xs: 2, sm: 2.5 }, borderRadius: 4, overflow: "hidden" }}>
+                  <Box aria-hidden sx={{
+                    position: "absolute", inset: 0, borderRadius: 4,
+                    background: `linear-gradient(90deg, ${theme.palette.primary.main}22, transparent 40%, ${theme.palette.secondary.main}22)`,
+                    filter: "blur(24px)", opacity: .6, pointerEvents: "none"
+                  }}/>
+                  <Grid container spacing={1.5}>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3, "&:hover":{ transform:{ md:"translateY(-2px)" } } }}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                          <CloudUploadIcon color="primary" />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography fontWeight={800}>Upload a file</Typography>
+                            <Typography variant="caption" color="text.secondary">Excel, PowerPoint, or Report</Typography>
+                          </Box>
+                          <Button variant="contained" size="small" component={RouterLink} to="/upload" endIcon={<ArrowForwardIcon/>}>Go</Button>
+                        </Stack>
+                      </Paper>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                          <TableChartIcon color="secondary" />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography fontWeight={800}>Explore databases</Typography>
+                            <Typography variant="caption" color="text.secondary">Search & manage data</Typography>
+                          </Box>
+                          <Button variant="outlined" color="secondary" size="small" component={RouterLink} to="/files">Open</Button>
+                        </Stack>
+                      </Paper>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                          <HelpOutlineIcon color="action" />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography fontWeight={800}>Need help?</Typography>
+                            <Typography variant="caption" color="text.secondary">Guides & best practices</Typography>
+                          </Box>
+                          <Button size="small" component={RouterLink} to="/help">Learn</Button>
+                        </Stack>
+                      </Paper>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* Recent Workbooks */}
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 4 }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <FolderIcon color="primary" />
+                    <Typography variant="h6" fontWeight={800}>Recent Workbooks</Typography>
+                    {!loading && <Chip size="small" label={`${recent.length}`} sx={{ ml: 1 }} />}
+                  </Stack>
+                  <Grid container spacing={1.5}>
+                    {(loading ? Array.from({ length: 8 }) : recent).map((wb, i)=>(
+                      <Grid key={wb?.id ?? i} item xs={12} sm={6} md={4} lg={3}>
+                        <Paper variant="outlined"
+                          sx={{
+                            p: 1.5, display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 1,
+                            alignItems: "center", borderRadius: 3,
+                            "&:hover":{ borderColor: `${theme.palette.primary.main}66`, transform:{ md:"translateY(-2px)" } }
+                          }}>
+                          <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: theme.palette.primary.main, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                            <FolderIcon fontSize="small" />
+                          </Box>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography sx={{ fontWeight: 800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                              {loading ? <Skeleton width={140}/> : (wb.name || wb.title || "Untitled")}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {loading ? <Skeleton width={100}/> : (wb.updated_at ? `Updated ${fromNow(wb.updated_at)}` : "—")}
+                            </Typography>
+                          </Box>
+                          <Chip size="small" label={loading ? "…" : `${(wb.sheets||[]).length ?? 0} sheets`} />
+                        </Paper>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Footer */}
+            <Divider sx={{ my: { xs: 3, md: 5 } }} />
+            <Box component="footer" sx={{
+              py: 4, px: 3,
+              background: "linear-gradient(180deg, rgba(0,150,214,0.12), rgba(0,191,166,0.12))",
+              borderTop: "1px solid rgba(0,0,0,0.06)"
+            }}>
+              <Typography variant="body2" color="text.secondary" align="center">
+                © {new Date().getFullYear()} Zinnov Platform · <Link href="#" underline="hover">Privacy</Link> · <Link href="#" underline="hover">Terms</Link>
+              </Typography>
             </Box>
           </Box>
         </Container>
-
-        <ExcelEditDialog open={excelDialog.open} file={excelDialog.file} onClose={() => setExcelDialog({ open: false, file: null })} />
       </Box>
     </ThemeProvider>
+  );
+}
+
+/* ---------- Micro Spark Bars ---------- */
+function SparkBars({ data = [], height = 36, gradient="primary" }) {
+  const max = Math.max(1, ...data);
+  return (
+    <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5, height }}>
+      {data.map((v, i) => (
+        <Box key={i}
+          sx={{
+            flex: 1, minWidth: 6, height: `${(v / max) * 100}%`, borderRadius: 1,
+            background: (t) => gradient==="primary"
+              ? `linear-gradient(180deg, ${t.palette.primary.main}b0, ${t.palette.primary.main})`
+              : `linear-gradient(180deg, ${t.palette.secondary.main}b0, ${t.palette.secondary.main})`,
+            boxShadow: "0 0 12px rgba(0,150,214,.15)",
+            opacity: 0.95
+          }}
+        />
+      ))}
+    </Box>
   );
 }
