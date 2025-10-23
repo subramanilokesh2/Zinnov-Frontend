@@ -19,11 +19,7 @@ import CheckIcon from "@mui/icons-material/CheckCircle";
 import ReportIcon from "@mui/icons-material/Report";
 import RemoveIcon from "@mui/icons-material/RemoveCircleOutline";
 import NewspaperIcon from "@mui/icons-material/Newspaper";
-
-const API_BASE =
-  (typeof import.meta !== "undefined" && import.meta?.env?.VITE_API_BASE) ||
-  process.env.REACT_APP_API_BASE ||
-  "http://localhost:5000";
+import { jsonFetch } from "../api"; // <-- use hosted API helper
 
 /** Colors used in Dashboard.jsx */
 const ZBLUE = "#0096D6";
@@ -91,7 +87,7 @@ export default function News() {
   const [group, setGroup] = useState("timeline"); // 'timeline' | 'category' | 'source'
 
   // Modal
-  const [active, setActive] = useState(null);
+  the const [active, setActive] = useState(null);
   const searchRef = useRef(null);
 
   const loadSaved = useCallback(async () => {
@@ -99,7 +95,7 @@ export default function News() {
     setErr("");
     const ac = new AbortController();
     try {
-      const res = await fetch(`${API_BASE}/api/news?limit=300`, { signal: ac.signal });
+      const res = await jsonFetch(`/api/news?limit=300`, { signal: ac.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setItems(Array.isArray(data) ? data : []);
@@ -119,7 +115,7 @@ export default function News() {
     setErr("");
     const ac = new AbortController();
     try {
-      const res = await fetch(`${API_BASE}/api/news/refresh-batch`, {
+      const res = await jsonFetch(`/api/news/refresh-batch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ count: 10 }),
@@ -141,7 +137,7 @@ export default function News() {
     setErr("");
     const ac = new AbortController();
     try {
-      const res = await fetch(`${API_BASE}/api/news/analyze`, { method: "POST", signal: ac.signal });
+      const res = await jsonFetch(`/api/news/analyze`, { method: "POST", signal: ac.signal });
       if (!res.ok) throw new Error(`Analyze HTTP ${res.status}`);
       await loadSaved();
     } catch (e) {
