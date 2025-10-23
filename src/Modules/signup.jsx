@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Cookies from "js-cookie";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { jsonFetch } from "../api";
 
 const COLORS = {
   background: "#f5f8ff",
@@ -92,7 +93,8 @@ function validateEmail(email) {
   const at = email.lastIndexOf("@");
   if (at < 0) return false;
   const domain = email.slice(at + 1).toLowerCase();
-  return ALLOWED_DOMAINS.includes(domain);
+  // allow subdomains, e.g., eu.zinnov.com
+  return ALLOWED_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
 }
 
 const Signup = () => {
@@ -101,6 +103,12 @@ const Signup = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // If already logged in, skip
+  useEffect(() => {
+    const existing = localStorage.getItem("token");
+    if (existing) navigate("/dashboard");
+  }, [navigate]);
 
   async function handleSignup(e) {
     e.preventDefault();
@@ -111,7 +119,6 @@ const Signup = () => {
       return;
     }
     if (!/^[A-Za-z0-9_-]{3,}$/.test(empId)) {
-      // Your allowlist contains numeric and non-numeric IDs like DBS0216, contract-2
       setError("Please enter a valid Employee ID (letters, numbers, underscore or hyphen).");
       return;
     }
@@ -119,41 +126,44 @@ const Signup = () => {
     try {
       setLoading(true);
 
-      const r = await fetch("http://localhost:5000/auth/login", {
+      const r = await jsonFetch(`/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), empId: empId.trim() }),
       });
 
+      // jsonFetch returns a Response – keep parity with other screens
       if (!r.ok) {
-        const msg = await r.json().catch(() => ({}));
-        throw new Error(msg?.error || "Login failed");
+        // Try to parse server error; fall back to generic
+        let msg = "Login failed";
+        try {
+          const j = await r.json();
+          msg = j?.error || msg;
+        } catch {}
+        throw new Error(msg);
       }
 
       const data = await r.json(); // { token, user }
       const { token, user } = data || {};
 
-      // Persist auth:
-      // - Prefer in-memory/HttpOnly cookies for security,
-      //   but here we store token to localStorage for SPA fetch calls.
-      localStorage.setItem("authToken", token);
+      // Persist auth (aligned with other modules)
+      localStorage.setItem("token", token);
       localStorage.setItem("authUser", JSON.stringify(user));
-      Cookies.set("session", "active", { expires: 1 }); // Optional UX cookie
-      sessionStorage.setItem("userEmail", user?.email || email);
+      Cookies.set("session", "active", { expires: 1 }); // UI-only cookie
+      sessionStorage.setItem("userEmail", user?.email || email.trim());
 
       toast.success("Login Successful! Redirecting to Dashboard...", {
         position: "top-center",
-        autoClose: 1200,
+        autoClose: 1100,
         onClose: () => navigate("/dashboard"),
       });
     } catch (err) {
       console.error(err);
-      toast.error(
+      const msg =
         err?.message === "Invalid credentials"
           ? "Invalid credentials. Please try again."
-          : `Login error: ${err?.message || "Something went wrong"}`,
-        { position: "top-center", autoClose: 2000 }
-      );
+          : `Login error: ${err?.message || "Something went wrong"}`;
+      toast.error(msg, { position: "top-center", autoClose: 1900 });
     } finally {
       setLoading(false);
     }
@@ -162,7 +172,7 @@ const Signup = () => {
   return (
     <div style={styles.container}>
       <ToastContainer />
-      <form style={styles.card} onSubmit={handleSignup} autoComplete="off">
+      <form style={styles.card} onSubmit={handleSignup} autoComplete="off" noValidate>
         <div style={styles.title}>Sign In</div>
         <div style={styles.subtitle}>
           Welcome to Zinnov Platform!
@@ -172,9 +182,7 @@ const Signup = () => {
 
         {error && <div style={styles.error}>{error}</div>}
 
-        <label style={styles.label} htmlFor="email">
-          Office Email
-        </label>
+        <label style={styles.label} htmlFor="email">Office Email</label>
         <input
           style={styles.input}
           type="email"
@@ -185,11 +193,12 @@ const Signup = () => {
           autoFocus
           required
           disabled={loading}
+          inputMode="email"
+          autoCapitalize="none"
+          spellCheck={false}
         />
 
-        <label style={styles.label} htmlFor="empid">
-          Employee ID
-        </label>
+        <label style={styles.label} htmlFor="empid">Employee ID</label>
         <input
           style={styles.input}
           type="text"
@@ -199,6 +208,8 @@ const Signup = () => {
           onChange={(e) => setEmpId(e.target.value)}
           required
           disabled={loading}
+          autoCapitalize="none"
+          spellCheck={false}
         />
 
         <button
