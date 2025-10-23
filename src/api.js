@@ -2,50 +2,28 @@
 const API_BASE =
   (typeof import.meta !== "undefined" && import.meta?.env?.VITE_API_BASE) ||
   process.env.REACT_APP_API_BASE ||
-  "https://zinnov-backend.onrender.com";
+  "http://localhost:5000"; // local fallback
 
-function buildHeaders(body) {
-  const h = {};
-  // Do NOT set Content-Type for FormData—browser sets boundary automatically
-  if (!(body instanceof FormData)) h["Content-Type"] = "application/json";
-  const token = localStorage.getItem("authToken");
-  if (token) h["Authorization"] = `Bearer ${token}`;
-  return h;
-}
-
-export async function apiFetch(
-  path,
-  { method = "GET", body, headers = {}, timeoutMs = 30000, ...rest } = {}
-) {
+export async function jsonFetch(path, opts = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-  const finalHeaders = { ...buildHeaders(body), ...headers };
+  const isForm = opts?.body instanceof FormData;
 
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(new DOMException("timeout", "AbortError")), timeoutMs);
-
-  let res;
-  try {
-    res = await fetch(url, {
-      method,
-      body,
-      headers: finalHeaders,
-      credentials: "include",
-      signal: ctrl.signal,
-      ...rest,
-    });
-  } finally {
-    clearTimeout(t);
+  const headers = new Headers(opts.headers || {});
+  // Only set JSON header when NOT sending FormData
+  if (!isForm && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
 
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try { msg = (await res.text()) || msg; } catch {}
-    throw new Error(msg);
+  const init = {
+    credentials: "include",
+    ...opts,
+    headers,
+  };
+
+  // If body is a plain object and not FormData, stringify it
+  if (!isForm && init.body && typeof init.body === "object") {
+    init.body = JSON.stringify(init.body);
   }
 
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) {
-    try { return await res.json(); } catch { return {}; }
-  }
-  return res.text();
+  return fetch(url, init);
 }
