@@ -32,11 +32,7 @@ import ContentPasteSearchIcon from "@mui/icons-material/ContentPasteSearch";
 import EditIcon from "@mui/icons-material/Edit";
 import LogoutIcon from "@mui/icons-material/Logout";
 
-// API base
-const API_BASE =
-  (typeof import.meta !== "undefined" && import.meta?.env?.VITE_API_BASE) ||
-  process.env.REACT_APP_API_BASE ||
-  "http://localhost:5000";
+import { jsonFetch } from "../api"; // ← use hosted API helper (handles base URL & credentials)
 
 /* Animations */
 const appear = keyframes`from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}`;
@@ -257,16 +253,17 @@ export default function Upload() {
     return true;
   }, [file, title, subPractice, fileType, workbook]);
 
-  // -------- Logout (keep consistent with Dashboard changes) --------
+  // -------- Logout (consistent with Dashboard) --------
   const handleLogout = useCallback(async () => {
     try {
-      await fetch(`${API_BASE}/api/logout`, { method: "POST", credentials: "include" }).catch(() => {});
+      await jsonFetch(`/api/logout`, { method: "POST" }).catch(() => {});
     } finally {
-      localStorage.removeItem("authToken");
+      localStorage.removeItem("token");
+      localStorage.removeItem("authUser");
       sessionStorage.clear();
-      navigate("/");
+      window.location.replace("/");
     }
-  }, [navigate]);
+  }, []);
 
   // Keyboard: Ctrl/Cmd + Enter to submit, Ctrl/Cmd + S to auto-fix
   useEffect(() => {
@@ -403,10 +400,12 @@ export default function Upload() {
       fd.append("description", description.trim());
       fd.append("tags", JSON.stringify((tags || "").split(",").map((t) => t.trim()).filter(Boolean)));
 
-      const createRes = await fetch(`${API_BASE}/api/files`, { method: "POST", body: fd });
+      // Create file record
+      const createRes = await jsonFetch(`/api/files`, { method: "POST", body: fd });
       if (!createRes.ok) throw new Error(`Upload failed: ${createRes.status}`);
       const created = await createRes.json(); // { id }
 
+      // Ingest selected sheets
       if (fileType === "EXCEL") {
         const selected = workbook.filter((s) => s.selected);
         for (const s of selected) {
@@ -428,9 +427,8 @@ export default function Upload() {
             columns: cols,
             notes: "Initial schema (headers auto-detected, sanitized, conflicts resolved).",
           };
-          const ingestRes = await fetch(`${API_BASE}/api/excel/ingest`, {
+          const ingestRes = await jsonFetch(`/api/excel/ingest`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           });
           if (!ingestRes.ok) throw new Error(await ingestRes.text());
