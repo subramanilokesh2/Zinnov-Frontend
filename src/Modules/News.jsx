@@ -86,10 +86,8 @@ export default function News() {
   const [catSel, setCatSel] = useState(new Set());
   const [group, setGroup] = useState("timeline"); // 'timeline' | 'category' | 'source'
 
-  // Modal
-  // Modal
 const [active, setActive] = useState(null);
-  const searchRef = useRef(null);
+const searchRef = useRef(null);
 
   const loadSaved = useCallback(async () => {
     setLoading(true);
