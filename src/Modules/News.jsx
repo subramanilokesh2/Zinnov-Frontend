@@ -87,7 +87,8 @@ export default function News() {
   const [group, setGroup] = useState("timeline"); // 'timeline' | 'category' | 'source'
 
   // Modal
-  the const [active, setActive] = useState(null);
+  // Modal
+const [active, setActive] = useState(null);
   const searchRef = useRef(null);
 
   const loadSaved = useCallback(async () => {
