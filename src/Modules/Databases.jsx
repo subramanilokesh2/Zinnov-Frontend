@@ -37,11 +37,7 @@ import DensityMediumIcon from "@mui/icons-material/DensityMedium";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import DoneIcon from "@mui/icons-material/Done";
 
-/* API base */
-const API_BASE =
-  (typeof import.meta !== "undefined" && import.meta?.env?.VITE_API_BASE) ||
-  process.env.REACT_APP_API_BASE ||
-  "http://localhost:5000";
+import { jsonFetch } from "../api"; // ← use hosted API helper
 
 /* Animations */
 const appear = keyframes`from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}`;
@@ -393,7 +389,7 @@ function ExcelEditDialog({ open, onClose, file }) {
     (async () => {
       setErr("");
       try {
-        const r = await fetch(`${API_BASE}/api/excel/file/${file.id}/sheets`);
+        const r = await jsonFetch(`/api/excel/file/${file.id}/sheets`);
         if (!r.ok) throw new Error(`Sheets fetch failed (${r.status})`);
         const sheets = await r.json();
         setTabs(sheets); setTabIndex(0); setOffset(0);
@@ -403,7 +399,7 @@ function ExcelEditDialog({ open, onClose, file }) {
 
   const loadColumns = useCallback(async () => {
     if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/file/${file.id}/sheet/${encodeURIComponent(active.sheetName)}/columns`);
+    const r = await jsonFetch(`/api/excel/file/${file.id}/sheet/${encodeURIComponent(active.sheetName)}/columns`);
     if (!r.ok) throw new Error(`Columns fetch failed (${r.status})`);
     const payload = await r.json(); setDbCols((payload.columns || []).map((c) => c));
   }, [active, file?.id]);
@@ -412,7 +408,7 @@ function ExcelEditDialog({ open, onClose, file }) {
     if (!active) return;
     setLoading(true); setErr("");
     try {
-      const r = await fetch(`${API_BASE}/api/excel/file/${file.id}/sheet/${encodeURIComponent(active.sheetName)}/rows?limit=${limit}&offset=${offset}`);
+      const r = await jsonFetch(`/api/excel/file/${file.id}/sheet/${encodeURIComponent(active.sheetName)}/rows?limit=${limit}&offset=${offset}`);
       if (!r.ok) throw new Error(`Rows fetch failed (${r.status})`);
       const payload = await r.json();
       setData({ columns: payload.columns || [], rows: payload.rows || [], total: payload.total || 0 });
@@ -429,42 +425,42 @@ function ExcelEditDialog({ open, onClose, file }) {
   // Column ops
   const addColumn = async (name, type = "text", defVal) => {
     if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/columns`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, type, default: defVal })
+    const r = await jsonFetch(`/api/excel/table/${active.schemaName}/${active.tableName}/columns`, {
+      method: "POST", body: JSON.stringify({ name, type, default: defVal })
     });
     if (!r.ok) throw new Error(await r.text() || "Add column failed");
   };
   const renameColumn = async (oldName, newName) => {
     if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/columns/${encodeURIComponent(oldName)}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ newName })
+    const r = await jsonFetch(`/api/excel/table/${active.schemaName}/${active.tableName}/columns/${encodeURIComponent(oldName)}`, {
+      method: "PATCH", body: JSON.stringify({ newName })
     });
     if (!r.ok) throw new Error(await r.text() || "Rename column failed");
   };
   const dropColumn = async (name) => {
     if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/columns/${encodeURIComponent(name)}`, { method: "DELETE" });
+    const r = await jsonFetch(`/api/excel/table/${active.schemaName}/${active.tableName}/columns/${encodeURIComponent(name)}`, { method: "DELETE" });
     if (!r.ok) throw new Error(await r.text() || "Delete column failed");
   };
 
   // Row ops
   const addRow = async () => {
     if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/rows`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: {} })
+    const r = await jsonFetch(`/api/excel/table/${active.schemaName}/${active.tableName}/rows`, {
+      method: "POST", body: JSON.stringify({ data: {} })
     });
     if (!r.ok) throw new Error(await r.text() || "Add row failed");
   };
   const updateCell = async (_rid, col, value) => {
     if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/rows/${_rid}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: { [col]: value } })
+    const r = await jsonFetch(`/api/excel/table/${active.schemaName}/${active.tableName}/rows/${_rid}`, {
+      method: "PATCH", body: JSON.stringify({ data: { [col]: value } })
     });
     if (!r.ok) throw new Error(await r.text() || "Update cell failed");
   };
   const deleteRow = async (_rid) => {
     if (!active) return;
-    const r = await fetch(`${API_BASE}/api/excel/table/${active.schemaName}/${active.tableName}/rows/${_rid}`, { method: "DELETE" });
+    const r = await jsonFetch(`/api/excel/table/${active.schemaName}/${active.tableName}/rows/${_rid}`, { method: "DELETE" });
     if (!r.ok) throw new Error(await r.text() || "Delete row failed");
   };
 
@@ -725,7 +721,7 @@ export default function Databases() {
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE}/api/files/organized`);
+        const res = await jsonFetch(`/api/files/organized`);
         if (res.ok) {
           const data = await res.json();
           if (ignore) return;
@@ -735,7 +731,7 @@ export default function Databases() {
           });
           setFilesBySP(map); setFallbackFlat([]);
         } else {
-          const r2 = await fetch(`${API_BASE}/api/files?limit=2000`);
+          const r2 = await jsonFetch(`/api/files?limit=2000`);
           const list = r2.ok ? await r2.json() : [];
           if (ignore) return;
           setFallbackFlat(Array.isArray(list) ? list : []); setFilesBySP(new Map());
