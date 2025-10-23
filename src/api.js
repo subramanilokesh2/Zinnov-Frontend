@@ -6,23 +6,46 @@ const API_BASE =
 
 function buildHeaders(body) {
   const h = {};
-  // IMPORTANT: do not set Content-Type for FormData (browser sets boundary)
+  // Do NOT set Content-Type for FormData—browser sets boundary automatically
   if (!(body instanceof FormData)) h["Content-Type"] = "application/json";
   const token = localStorage.getItem("authToken");
   if (token) h["Authorization"] = `Bearer ${token}`;
   return h;
 }
 
-export async function apiFetch(path, { method = "GET", body, headers = {}, ...rest } = {}) {
+export async function apiFetch(
+  path,
+  { method = "GET", body, headers = {}, timeoutMs = 30000, ...rest } = {}
+) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
   const finalHeaders = { ...buildHeaders(body), ...headers };
-  const res = await fetch(url, { method, body, headers: finalHeaders, credentials: "include", ...rest });
+
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(new DOMException("timeout", "AbortError")), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      body,
+      headers: finalHeaders,
+      credentials: "include",
+      signal: ctrl.signal,
+      ...rest,
+    });
+  } finally {
+    clearTimeout(t);
+  }
 
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { msg = (await res.text()) || msg; } catch {}
     throw new Error(msg);
   }
+
   const ct = res.headers.get("content-type") || "";
-  return ct.includes("application/json") ? res.json() : res.text();
+  if (ct.includes("application/json")) {
+    try { return await res.json(); } catch { return {}; }
+  }
+  return res.text();
 }
