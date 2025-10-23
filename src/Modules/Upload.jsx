@@ -1,6 +1,6 @@
 // Revamped Upload.jsx — Advanced, smart, and polished (no new deps)
 // deps (unchanged): npm i @mui/material @emotion/react @emotion/styled @mui/icons-material xlsx jszip
-// Drop-in replacement. API unchanged.
+// Drop-in replacement. API unchanged (but uses apiFetch for proper FormData handling)
 
 import * as React from "react";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
@@ -32,7 +32,8 @@ import ContentPasteSearchIcon from "@mui/icons-material/ContentPasteSearch";
 import EditIcon from "@mui/icons-material/Edit";
 import LogoutIcon from "@mui/icons-material/Logout";
 
-import { jsonFetch } from "../api"; // ← use hosted API helper (handles base URL & credentials)
+// IMPORTANT: use the helper that conditionally sets headers (no Content-Type for FormData)
+import { apiFetch } from "../api";
 
 /* Animations */
 const appear = keyframes`from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}`;
@@ -256,7 +257,7 @@ export default function Upload() {
   // -------- Logout (consistent with Dashboard) --------
   const handleLogout = useCallback(async () => {
     try {
-      await jsonFetch(`/api/logout`, { method: "POST" }).catch(() => {});
+      await apiFetch(`/api/logout`, { method: "POST" }).catch(() => {});
     } finally {
       localStorage.removeItem("token");
       localStorage.removeItem("authUser");
@@ -392,24 +393,32 @@ export default function Upload() {
       setUploading(true);
       setSnack({ open: true, msg: "Uploading…", sev: "info" });
 
+      // Build multipart payload (IMPORTANT: field names must match backend)
       const fd = new FormData();
-      fd.append("file", file);
-      fd.append("type", fileType);
-      fd.append("subPractice", subPractice);
+      fd.append("file", file); // REQUIRED name: "file"
+      fd.append("type", fileType); // "EXCEL" | "POWERPOINT" | "REPORT"
+      fd.append("sub_practice", subPractice); // snake_case for backend
       fd.append("title", (title || stripExt(file.name)).trim());
-      fd.append("description", description.trim());
-      fd.append("tags", JSON.stringify((tags || "").split(",").map((t) => t.trim()).filter(Boolean)));
+      fd.append("description", (description || "").trim());
+      fd.append(
+        "tags",
+        JSON.stringify(
+          (Array.isArray(tags) ? tags : String(tags))
+            .toString()
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        )
+      );
 
-      // Create file record
-      const createRes = await jsonFetch(`/api/files`, { method: "POST", body: fd });
-      if (!createRes.ok) throw new Error(`Upload failed: ${createRes.status}`);
-      const created = await createRes.json(); // { id }
+      // Create file record — apiFetch returns parsed JSON or text
+      const created = await apiFetch(`/api/files`, { method: "POST", body: fd }); // → { id }
+      if (!created || !created.id) throw new Error("Upload failed: invalid response from server.");
 
-      // Ingest selected sheets
+      // Ingest selected sheets (JSON)
       if (fileType === "EXCEL") {
         const selected = workbook.filter((s) => s.selected);
         for (const s of selected) {
-          // ensure final uniqueness
           const finalSan = uniqueSanitized(s.headersSanitized);
           const cols = finalSan.map((name, i) => ({
             name,
@@ -417,21 +426,22 @@ export default function Upload() {
             nullable: true,
             originalName: s.headers[i] || name,
           }));
-          const tableName = selected.length === 1 ? sanitizeIdentifier(title || s.name).toLowerCase()
+          const tableName = selected.length === 1
+            ? sanitizeIdentifier(title || s.name).toLowerCase()
             : sanitizeIdentifier(`${title || stripExt(file.name)}__${s.name}`).toLowerCase();
           const body = {
-            fileId: created?.id,
+            fileId: created.id,
             sheetName: s.name,
             headerRowIndex: s.headerRowIdx,
             tableName: startsWithLetter(tableName) ? tableName : `t_${tableName}`,
             columns: cols,
             notes: "Initial schema (headers auto-detected, sanitized, conflicts resolved).",
           };
-          const ingestRes = await jsonFetch(`/api/excel/ingest`, {
+          // apiFetch auto-sets JSON headers when body is a string/object (non-FormData)
+          await apiFetch(`/api/excel/ingest`, {
             method: "POST",
             body: JSON.stringify(body),
           });
-          if (!ingestRes.ok) throw new Error(await ingestRes.text());
         }
       }
 
@@ -439,6 +449,7 @@ export default function Upload() {
       setTimeout(() => navigate("/files"), 600);
     } catch (e) {
       setSnack({ open: true, msg: e.message || "Upload error", sev: "error" });
+      console.error(e);
     } finally {
       setUploading(false);
     }
